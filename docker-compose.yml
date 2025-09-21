@@ -1,0 +1,26 @@
+services:
+  # This is your existing Node.js application service.
+  backend:
+    build: .
+    # CRITICAL: We DO NOT expose ports on the backend service anymore.
+    # It will only be accessible from within the Docker network by Nginx.
+    env_file:
+      - .env
+    container_name: my-express-backend
+
+  # This is the new service for our Nginx reverse proxy.
+  nginx:
+    image: nginx:alpine
+    container_name: my-nginx-proxy
+    # Nginx is now the public entry point. It listens on port 80 of your
+    # computer and forwards traffic to its own port 80.
+    ports:
+      - "80:80"
+    # This mounts your nginx.conf file into the container, telling Nginx
+    # how to forward traffic to the 'backend' service.
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+    # This ensures that the backend container is started and running
+    # before the Nginx container starts.
+    depends_on:
+      - backend
