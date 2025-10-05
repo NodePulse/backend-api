@@ -14,8 +14,9 @@ export const protect = async (
   next: NextFunction
 ) => {
   try {
+    const token = req.cookies.token;
+    // console.log(req.cookies)
     // The cookie name should match what you set during login
-    const token = req.cookies.sessionId;
 
     if (!token) {
       return res.status(401).json({ error: "Not authorized, no token" });
@@ -26,6 +27,7 @@ export const protect = async (
       token,
       process.env.JWT_SECRET as string
     ) as JwtPayload;
+    // console.log(decoded)
 
     if (!decoded) {
       return res.status(401).json({ error: "Not authorized, token failed" });
@@ -48,6 +50,7 @@ export const protect = async (
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
+    // console.log(user)
 
     req.user = user as AuthenticatedUser;
     next();

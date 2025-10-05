@@ -5,13 +5,21 @@ import type { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import cors, { CorsOptions } from "cors";
 import authRouter from "./routes/authRoutes.js";
+import adminRouter from "./routes/adminRoutes.js";
+import accountRouter from "./routes/accountRoutes.js";
+import eventRouter from "./routes/eventRoutes.js";
+import { Server } from "socket.io";
+import { createServer } from "http";
+import { initializeSocket } from "./utils/socketHandler.js";
+import userRouter from "./routes/userRoutes.js";
 
 // Initialize the Express application
 const app = express();
 const PORT: number = 8080;
 
 const options: CorsOptions = {
-  origin: "http:localhost:3000",
+  origin: "http://localhost:3000",
+  credentials: true
 };
 
 app.use(express.json());
@@ -24,9 +32,25 @@ app.get("/", (_req: Request, res: Response) => {
   return res.status(200).json({ Hello: "World" });
 });
 
-app.use("/api/v1/auth", authRouter);
+app.use("/api/v1/user/auth", authRouter);
+app.use("/api/v1/admin/auth", adminRouter);
+app.use("/api/v1/admin/account", accountRouter);
+app.use("/api/v1/user/events", eventRouter);
+app.use("/api/v1/user", userRouter);
+
+const httpServer = createServer(app);
+
+const io = new Server(httpServer, {
+  // 3. Configure CORS to allow your frontend origin
+  cors: {
+    origin: process.env.CLIENT_URL || "http://localhost:3000", // Your Next.js app URL
+    methods: ["GET", "POST"],
+  },
+});
+
+initializeSocket(io);
 
 // Start the server and listen for connections on the specified port
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`[server]: Server running at http://localhost:${PORT}`);
 });
