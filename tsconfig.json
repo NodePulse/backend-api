@@ -14,9 +14,9 @@
     // --- Module Resolution ---
     "module": "nodenext",                              /* Specify what module code is generated. 'NodeNext' is the modern standard for Node.js, supporting both ES Modules and CommonJS interop. */
     "moduleResolution": "nodenext",                    /* Determines how modules get resolved. 'NodeNext' is the required counterpart to `module: "NodeNext"`. */
-    "baseUrl": "src",                                   /* Base directory to resolve non-absolute module names. Essential for path aliases. */
+    "baseUrl": "./",                                   /* Base directory to resolve non-absolute module names. Essential for path aliases. */
     "paths": {                                         /* Create module mapping 'aliases' to simplify imports. Avoids long relative paths like '../../'. */
-      "@/*": ["*"]                                 /* Example: `import { myUtil } from '@/utils/helpers'` instead of `import { myUtil } from '../utils/helpers'`. */
+      "@/*": ["src/*"]                                 /* Example: `import { myUtil } from '@/utils/helpers'` instead of `import { myUtil } from '../utils/helpers'`. */
     },
     "resolveJsonModule": true,                         /* Allows importing .json files directly into your code, which is useful for config files. */
     

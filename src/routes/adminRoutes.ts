@@ -1,5 +1,5 @@
-import { changeAdminPassword, loginAdmin } from "@/controller/adminController";
-import { protectAdmin } from "@/middleware/adminMiddleware";
+import { changeAdminPassword, loginAdmin } from "../controller/adminController.js";
+import { protectAdmin } from "../middleware/adminMiddleware.js";
 import { Router } from "express";
 
 const adminRouter = Router();

@@ -1,6 +1,6 @@
 import { getAuth } from "firebase-admin/auth";
 import { Request, Response } from "express";
-import prisma from "@/config/prisma";
+import prisma from "../config/prisma.js";
 
 // Controller for Google Sign-In
 export const googleAuth = async (req: Request, res: Response) => {

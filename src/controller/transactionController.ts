@@ -1,4 +1,4 @@
-import prisma from "@/config/prisma";
+import prisma from "../config/prisma.js";
 import { Request, Response } from "express";
 
 export const getTransactionHistory = async (req: Request, res: Response) => {

@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import prisma from "@/config/prisma";
+import prisma from "../config/prisma.js";
 
 const generateToken = (id: string, email: string, role: "ADMIN") => {
   return jwt.sign({ id, email, role }, process.env.JWT_SECRET as string, {

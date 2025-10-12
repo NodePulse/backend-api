@@ -1,5 +1,5 @@
 import { getOrganizedEvents, getUserEvents, getUserProfile, updateProfileImage } from "@/controller/userController.js";
-import { protect } from "@/middleware/authMiddleware";
+import { protect } from "@/middleware/authMiddleware.js";
 import { Router } from "express";
 import multer from "multer"
 

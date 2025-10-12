@@ -1,6 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import jwt from "jsonwebtoken";
-import { AuthenticatedUser } from "../types/express";
+import { AuthenticatedUser } from "../types/express.js";
 import prisma from "../config/prisma.js";
 
 // Define a clear interface for the JWT payload
