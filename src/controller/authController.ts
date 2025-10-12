@@ -1,13 +1,13 @@
 import type { Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import jwt, { JwtPayload } from "jsonwebtoken";
+import jwt from "jsonwebtoken";
 import prisma from "../config/prisma.js";
 import nodemailer from "nodemailer";
 
-const OTP_EXPIRY_MINUTES = 10;
-const OTP_RESEND_COOLDOWN_MINUTES = 2;
-const OTP_MAX_ATTEMPTS_PER_24H = 3;
+// const OTP_EXPIRY_MINUTES = 10;
+// const OTP_RESEND_COOLDOWN_MINUTES = 2;
+// const OTP_MAX_ATTEMPTS_PER_24H = 3;
 
 const generateToken = (userId: string) => {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET as string, {
@@ -111,6 +111,9 @@ export const login = async (req: Request, res: Response) => {
 };
 
 export const logout = (req: Request, res: Response) => {
+  const userId = (req as any).user?.id;
+  console.log(userId)
+
   res.cookie("token", "", {
     httpOnly: true,
     expires: new Date(0),

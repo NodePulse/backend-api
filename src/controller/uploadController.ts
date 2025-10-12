@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-import type { Express } from "express"; // Import type for file object
+// import type { Express } from "express";
 
 const BUCKET_NAME = process.env.R2_BUCKET!;
 

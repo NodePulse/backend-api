@@ -126,8 +126,14 @@ export const updateProfileImage = async (req: Request, res: Response) => {
 
     const oldImageUrl = user.image;
 
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+    const imageFile = files?.image?.[0];
+
+    if (!imageFile) {
+      return res.status(400).json({ message: "Image file is missing." });
+    }
     // 3. Upload the new image to S3
-    const uploadResult = await uploadFileToR2(req.files.image[0]);
+    const uploadResult = await uploadFileToR2(imageFile);
     const newImageUrl = uploadResult; // The public URL of the uploaded image
 
     // 4. Update the user's record in the database with the new URL

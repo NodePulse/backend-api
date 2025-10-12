@@ -32,6 +32,7 @@ export const googleAuth = async (req: Request, res: Response) => {
         email,
         name,
         image: picture,
+        username: email.split("@")[0],
       },
     });
 
