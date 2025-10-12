@@ -1,4 +1,4 @@
-import { getTransactionHistory } from "@/controller/transactionController.js";
+import { getTransactionHistory } from "../controller/transactionController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { Router } from "express";
 

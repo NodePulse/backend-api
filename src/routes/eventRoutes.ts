@@ -1,4 +1,4 @@
-import { checkEventRegistration, createEvent, eventRegister, getAllEvents, getEventAttendees, getEventById, getMyEvents } from "@/controller/eventController.js";
+import { checkEventRegistration, createEvent, eventRegister, getAllEvents, getEventAttendees, getEventById, getMyEvents } from "../controller/eventController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { Router } from "express";
 import multer from "multer";

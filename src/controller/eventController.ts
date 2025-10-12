@@ -3,7 +3,7 @@ import prisma from "../config/prisma.js";
 import { uploadFileToR2 } from "./uploadController.js";
 import { validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
-import { generateTransactionId } from "@/utils/commonFunction.js";
+import { generateTransactionId } from "../utils/commonFunction.js";
 
 /**
  * @desc    Create a new event
