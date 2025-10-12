@@ -12,8 +12,8 @@
     "noFallthroughCasesInSwitch": true,                /* Report errors for fallthrough cases in switch statement. Prevents unintentional bugs from missing 'break' statements. */
 
     // --- Module Resolution ---
-    "module": "preserve",                              /* Specify what module code is generated. 'NodeNext' is the modern standard for Node.js, supporting both ES Modules and CommonJS interop. */
-    "moduleResolution": "bundler",                    /* Determines how modules get resolved. 'NodeNext' is the required counterpart to `module: "NodeNext"`. */
+    "module": "nodenext",                              /* Specify what module code is generated. 'NodeNext' is the modern standard for Node.js, supporting both ES Modules and CommonJS interop. */
+    "moduleResolution": "nodenext",                    /* Determines how modules get resolved. 'NodeNext' is the required counterpart to `module: "NodeNext"`. */
     "baseUrl": "./",                                   /* Base directory to resolve non-absolute module names. Essential for path aliases. */
     "paths": {                                         /* Create module mapping 'aliases' to simplify imports. Avoids long relative paths like '../../'. */
       "@/*": ["src/*"]                                 /* Example: `import { myUtil } from '@/utils/helpers'` instead of `import { myUtil } from '../utils/helpers'`. */
