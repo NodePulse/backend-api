@@ -29,7 +29,7 @@ export const loginAdmin = async (req: Request, res: Response) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       maxAge: 60 * 60 * 1000,
-      sameSite: "lax",
+      sameSite: "none",
     });
 
     return res.status(200).json({
