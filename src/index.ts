@@ -12,13 +12,14 @@ import { Server } from "socket.io";
 import { createServer } from "http";
 import { initializeSocket } from "./utils/socketHandler.js";
 import userRouter from "./routes/userRoutes.js";
+import transactionRouter from "./routes/transactionRoutes.js";
 
 // Initialize the Express application
 const app = express();
 const PORT: number = 8080;
 
 const options: CorsOptions = {
-  origin: "http://localhost:3000",
+  origin: ["http://localhost:3000", "http://localhost:3001"],
   credentials: true
 };
 
@@ -37,13 +38,14 @@ app.use("/api/v1/admin/auth", adminRouter);
 app.use("/api/v1/admin/account", accountRouter);
 app.use("/api/v1/user/events", eventRouter);
 app.use("/api/v1/user", userRouter);
+app.use("/api/v1/transactions", transactionRouter)
 
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   // 3. Configure CORS to allow your frontend origin
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000", // Your Next.js app URL
+    origin: [process.env.CLIENT_URL || "http://localhost:3000", "http://localhost:3001"], // Your Next.js app URL
     methods: ["GET", "POST"],
   },
 });

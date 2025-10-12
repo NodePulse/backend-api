@@ -11,15 +11,24 @@ interface ChatMessageData {
     avatarUrl?: string;
   };
 }
+const onlineUsers = new Map<string, Set<string>>();
 
 export const initializeSocket = (io: Server) => {
   io.on("connection", (socket: Socket) => {
     // console.log(`✅ User connected: ${socket.id}`);
 
     // --- Handle joining a room ---
-    socket.on("joinRoom", async (eventId: string) => {
+    socket.on("joinRoom", async (eventId: string, userId: string) => {
       socket.join(eventId);
+      if (!onlineUsers.has(eventId)) {
+        onlineUsers.set(eventId, new Set());
+      }
+      onlineUsers.get(eventId)?.add(userId);
       // console.log(`User ${socket.id} joined room ${eventId}`);
+      io.to(eventId).emit("userStatus", {
+        userId,
+        isOnline: true,
+      });
 
       try {
         const event = await prisma.event.findUnique({
@@ -29,7 +38,7 @@ export const initializeSocket = (io: Server) => {
 
         const history = await prisma.chatMessage.findMany({
           where: { eventId },
-          take: 50,
+          // take: ,
           orderBy: { createdAt: "asc" },
           include: {
             author: {
@@ -52,8 +61,10 @@ export const initializeSocket = (io: Server) => {
             role: msg.author.id === event?.organizerId ? 'ORGANIZER' : 'PARTICIPANT',
           },
         }));
-
+        
         socket.emit("chatHistory", formattedHistory);
+        const currentOnlineUsers = Array.from(onlineUsers.get(eventId) || []);
+        socket.emit("onlineUsers", currentOnlineUsers);
       } catch (error) {
         console.error("Error fetching chat history:", error);
       }
@@ -106,6 +117,27 @@ export const initializeSocket = (io: Server) => {
       } catch (error) {
         console.error("Error saving message:", error);
       }
+    });
+
+    socket.on("disconnecting", () => {
+      // Find all rooms the user was in
+      const rooms = Array.from(socket.rooms).filter((r) => r !== socket.id);
+
+      rooms.forEach((eventId) => {
+        for (const [eId, users] of onlineUsers.entries()) {
+          if (eId === eventId) {
+            // You need to store userId in socket’s data
+            const userId = (socket as any).userId;
+            if (userId) {
+              users.delete(userId);
+              io.to(eventId).emit("userStatus", {
+                userId,
+                isOnline: false,
+              });
+            }
+          }
+        }
+      });
     });
 
     // --- Handle user disconnection ---

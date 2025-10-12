@@ -3,6 +3,7 @@ import prisma from "../config/prisma.js";
 import { uploadFileToR2 } from "./uploadController.js";
 import { validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
+import { generateTransactionId } from "@/utils/commonFunction.js";
 
 /**
  * @desc    Create a new event
@@ -19,7 +20,17 @@ export const createEvent = async (req: Request, res: Response) => {
   // console.log(req.files)
 
   // 2. Get the event details from the request body
-  const { title, description, startDate, endDate, location, category, price, currency } = req.body;
+  const {
+    title,
+    description,
+    body,
+    startDate,
+    endDate,
+    location,
+    category,
+    price,
+    currency,
+  } = req.body;
   const files = req.files;
   let imageUrl: string | undefined;
   let videoUrl: string | undefined;
@@ -44,9 +55,20 @@ export const createEvent = async (req: Request, res: Response) => {
   }
 
   // 3. Validate the required input fields
-  if (!title || !description || !startDate || !endDate || !location || !category || !price || !currency) {
+  if (
+    !title ||
+    !description ||
+    !body ||
+    !startDate ||
+    !endDate ||
+    !location ||
+    !category ||
+    !price ||
+    !currency
+  ) {
     return res.status(400).json({
-      error: "Title, description, date, and location are required fields.",
+      error:
+        "Title, description, body, date, and location are required fields.",
     });
   }
 
@@ -56,6 +78,7 @@ export const createEvent = async (req: Request, res: Response) => {
       data: {
         title,
         description,
+        body,
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         location,
@@ -70,6 +93,7 @@ export const createEvent = async (req: Request, res: Response) => {
       select: {
         id: true,
         title: true,
+        body: true,
         startDate: true,
         endDate: true,
         location: true,
@@ -113,6 +137,7 @@ export const getMyEvents = async (req: Request, res: Response) => {
         id: true,
         title: true,
         description: true,
+        body: true,
         startDate: true,
         endDate: true,
         location: true,
@@ -225,7 +250,7 @@ export const getEventById = async (req: Request, res: Response) => {
       include: {
         organizer: true,
         // category: true,
-      }
+      },
     });
 
     // 4. Handle the case where the event is not found
@@ -237,52 +262,6 @@ export const getEventById = async (req: Request, res: Response) => {
     return res.status(200).json(event);
   } catch (error) {
     console.error("Failed to fetch event:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-};
-
-export const eventRegister = async (req: Request, res: Response) => {
-  const eventId = req.params.id;
-  const userId = (req as any).user?.id;
-
-  if (!userId) {
-    return res.status(401).json({ error: "User not authenticated." });
-  }
-
-  if (!eventId) {
-    return res.status(400).json({ error: "Event ID is required." });
-  }
-
-  try {
-    // Check if already registered
-    const existingRegistration = await prisma.event.findFirst({
-      where: {
-        id: eventId,
-        attendees: {
-          some: { userId },
-        },
-      },
-    });
-
-    if (existingRegistration) {
-      return res
-        .status(409)
-        .json({ error: "User already registered for this event." });
-    }
-
-    // Register the user
-    await prisma.event.update({
-      where: { id: eventId },
-      data: {
-        attendees: {
-          create: { userId },
-        },
-      },
-    });
-
-    return res.status(200).json({ message: "Registration successful" });
-  } catch (error) {
-    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -311,10 +290,10 @@ export const checkEventRegistration = async (req: Request, res: Response) => {
 
     // 2. Check if the current user is the organizer
     if (event.organizerId === userId) {
-      return res.status(200).json({ 
-        registered: true, 
-        isOrganizer: true, 
-        message: "You are the organizer of this event." 
+      return res.status(200).json({
+        registered: true,
+        isOrganizer: true,
+        message: "You are the organizer of this event.",
       });
     }
 
@@ -327,16 +306,16 @@ export const checkEventRegistration = async (req: Request, res: Response) => {
     });
 
     if (existingRegistration) {
-      return res.status(200).json({ 
-        registered: true, 
-        isOrganizer: false, 
-        message: "You are registered for this event." 
+      return res.status(200).json({
+        registered: true,
+        isOrganizer: false,
+        message: "You are registered for this event.",
       });
     } else {
-      return res.status(200).json({ 
-        registered: false, 
-        isOrganizer: false, 
-        message: "You are not registered for this event." 
+      return res.status(200).json({
+        registered: false,
+        isOrganizer: false,
+        message: "You are not registered for this event.",
       });
     }
   } catch (error) {
@@ -356,8 +335,8 @@ export const getEventAttendees = async (req: Request, res: Response) => {
 
   const { id: eventId } = req.params;
   const userId = (req as any).user?.id;
-  const { page = '1', limit = '20' } = req.query;
-  console.log(eventId)
+  const { page = "1", limit = "20" } = req.query;
+  console.log(eventId);
 
   const pageNum = parseInt(page as string, 10);
   const limitNum = parseInt(limit as string, 10);
@@ -370,7 +349,7 @@ export const getEventAttendees = async (req: Request, res: Response) => {
       take: limitNum,
       skip: offset,
       orderBy: {
-        registeredAt: 'desc', // Added for consistent ordering
+        registeredAt: "desc", // Added for consistent ordering
       },
       include: {
         // 3. Include the user's public information
@@ -407,8 +386,10 @@ export const getEventAttendees = async (req: Request, res: Response) => {
     // 5. Send the structured response
     return res.status(200).json({
       // --- FIX APPLIED HERE ---
-      data: attendees.filter(attendee => attendee.userId !== userId).map(attendee => attendee.user),
-      me: attendees.find(attendee => attendee.userId === userId)?.user,
+      data: attendees
+        .filter((attendee) => attendee.userId !== userId)
+        .map((attendee) => attendee.user),
+      me: attendees.find((attendee) => attendee.userId === userId)?.user,
       organizer,
       pagination: {
         totalItems: totalAttendees,
@@ -419,6 +400,118 @@ export const getEventAttendees = async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("Failed to fetch event attendees:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+export const eventRegister = async (req: Request, res: Response) => {
+  const eventId = req.params.id;
+  const userId = (req as any).user?.id;
+  const { amount, currency, paymentMethod, cardNumber, upiId } = req.body;
+
+  const last4 = cardNumber ? cardNumber.slice(-4) : null;
+
+  if (!userId)
+    return res.status(401).json({ error: "User not authenticated." });
+  if (!eventId) return res.status(400).json({ error: "Event ID is required." });
+
+  try {
+    // 1. Find the event and check for existing registration
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { attendees: { where: { userId } } },
+    });
+
+    if (!event) return res.status(404).json({ error: "Event not found." });
+    if (event.attendees.length > 0)
+      return res.status(409).json({ error: "Already registered." });
+
+    const isFreeEvent = !event.price || Number(event.price) <= 0;
+
+    if (isFreeEvent) {
+      console.log(amount, currency)
+      // FREE event: register directly
+      if (Number(amount) !== 0 || !currency) {
+        return res
+          .status(400)
+          .json({ error: "Payment details are required for free events." });
+      }
+
+      const transactionId = generateTransactionId(eventId, userId);
+
+      const payment = await prisma.payment.create({
+        data: {
+          amount,
+          currency,
+          status: "COMPLETED",
+          transactionId,
+          paymentGateway: "mock",
+          userId,
+          eventId,
+          cardLast4: last4,
+          method: "free", // "card" or "upi" etc.
+          metadata: paymentMethod === "free" ? { userId: userId } : {},
+        },
+      });
+
+      await prisma.$transaction(async (tx) => {
+        await tx.attendee.create({ data: { userId, eventId } });
+      });
+
+      return res.status(200).json({
+        message: "Registration successful.",
+        paymentId: payment.id,
+      });
+    } else {
+      // PAID event: payment required
+      if (!amount || !currency || !paymentMethod) {
+        return res
+          .status(400)
+          .json({ error: "Payment details are required for paid events." });
+      }
+
+      // Simulate payment success/failure randomly
+      const paymentSuccess = Math.random() > 0.2; // 80% chance success, 20% fail
+
+      const payment = await prisma.payment.create({
+        data: {
+          amount,
+          currency,
+          status: paymentSuccess ? "COMPLETED" : "FAILED",
+          transactionId: "TXN_" + Math.random().toString(36).substring(2, 15),
+          paymentGateway: "mock",
+          userId,
+          eventId,
+          cardLast4: last4,
+          method: paymentMethod, // "card" or "upi" etc.
+          metadata:
+            paymentMethod === "upi"
+              ? { upiId }
+              : paymentMethod === "card"
+              ? { cardNumber }
+              : {},
+        },
+      });
+
+      if (!paymentSuccess) {
+        return res.status(402).json({
+          error: "Payment failed. Please try again.",
+          paymentId: payment.id,
+        });
+      }
+
+      // Register attendee in a transaction
+      await prisma.$transaction(async (tx) => {
+        await tx.attendee.create({ data: { userId, eventId } });
+      });
+
+      return res.status(200).json({
+        message: "Registration and payment successful.",
+        paymentId: payment.id,
+      });
+    }
+  } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };

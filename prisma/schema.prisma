@@ -25,6 +25,7 @@ model User {
   comments        Comment[]
   organizedEvents Event[]       @relation("OrganizedEvents")
   posts           Post[]
+  payments        Payment[]
 }
 
 model Admin {
@@ -61,6 +62,7 @@ model Event {
   id           String        @id @default(cuid())
   title        String
   description  String
+  body         String
   location     String
   imageUrl     String?
   organizerId  String
@@ -74,6 +76,7 @@ model Event {
   chatMessages ChatMessage[]
   comments     Comment[]
   organizer    User          @relation("OrganizedEvents", fields: [organizerId], references: [id])
+  payments     Payment[]
 }
 
 model Attendee {
@@ -127,6 +130,31 @@ model Otp {
   createdAt DateTime @default(now())
 
   @@index([email])
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  amount         Float
+  currency       String
+  status         PaymentStatus @default(PENDING)
+  transactionId  String        @unique
+  paymentGateway String        // e.g., "mock"
+  userId         String
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventId        String
+  event          Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  cardLast4      String?       // Only last 4 digits for card
+  method         String        // card, upi, netbanking, etc.
+  metadata       Json?         // Store extra info like UPI ID
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
 }
 
 enum UserRole {

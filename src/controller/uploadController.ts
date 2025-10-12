@@ -1,5 +1,7 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
 import type { Express } from "express"; // Import type for file object
+
+const BUCKET_NAME = process.env.R2_BUCKET!;
 
 // Initialize the S3 Client for Cloudflare R2
 const s3 = new S3Client({
@@ -21,12 +23,11 @@ export const uploadFileToR2 = async (file: Express.Multer.File): Promise<string>
   const fileKey = `events/${Date.now()}-${file.originalname}`;
 
   const command = new PutObjectCommand({
-    Bucket: process.env.R2_BUCKET!,
+    Bucket: BUCKET_NAME,
     Key: fileKey,
     Body: file.buffer,
     ContentType: file.mimetype,
   });
-  console.log(command)
 
   try {
     // 2. FIX: Add a try...catch block for robust error handling
@@ -36,7 +37,6 @@ export const uploadFileToR2 = async (file: Express.Multer.File): Promise<string>
     // This is the public URL of your R2 bucket, which you set in your Cloudflare dashboard.
     const baseUrl = process.env.R2_PUBLIC_URL?.replace(/\/+$/, "");
     const publicUrl = `${baseUrl}/${fileKey}`;
-    console.log(publicUrl)
     return publicUrl;
     
   } catch (error) {
@@ -45,3 +45,26 @@ export const uploadFileToR2 = async (file: Express.Multer.File): Promise<string>
     throw new Error("Failed to upload file.");
   }
 };
+
+export const deleteFromS3 = async (imageUrl: string) => {
+  try {
+    if (!imageUrl || !imageUrl.includes(BUCKET_NAME)) return;
+
+    const key = new URL(imageUrl).pathname.substring(1);
+
+    // Optional: check if object exists before deletion
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+      console.log("Object exists, deleting now...");
+    } catch {
+      console.log("Object does not exist. Skipping deletion.");
+      return;
+    }
+
+    await s3.send(new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+    console.log("Delete command sent successfully");
+  } catch (err) {
+    console.error("Error in deleteFromS3:", err);
+  }
+};
+
