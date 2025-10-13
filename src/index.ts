@@ -4,15 +4,13 @@ import express from "express";
 import type { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import cors, { CorsOptions } from "cors";
-import authRouter from "./routes/authRoutes.js";
-import adminRouter from "./routes/adminRoutes.js";
-import accountRouter from "./routes/accountRoutes.js";
-import eventRouter from "./routes/eventRoutes.js";
 import { Server } from "socket.io";
 import { createServer } from "http";
 import { initializeSocket } from "./utils/socketHandler.js";
-import userRouter from "./routes/userRoutes.js";
-import transactionRouter from "./routes/transactionRoutes.js";
+import router from "./routes/index.js";
+
+import swaggerUi from "swagger-ui-express";
+import { swaggerSpec } from "./docs/swaggerDef.js";
 
 // Initialize the Express application
 const app = express();
@@ -22,6 +20,8 @@ const options: CorsOptions = {
   origin: ["http://localhost:3000", "http://localhost:3001"],
   credentials: true
 };
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 app.use(express.json());
 app.use(cookieParser());
@@ -33,12 +33,7 @@ app.get("/", (_req: Request, res: Response) => {
   return res.status(200).json({ Hello: "World" });
 });
 
-app.use("/api/v1/user/auth", authRouter);
-app.use("/api/v1/admin/auth", adminRouter);
-app.use("/api/v1/admin/account", accountRouter);
-app.use("/api/v1/user/events", eventRouter);
-app.use("/api/v1/user", userRouter);
-app.use("/api/v1/transactions", transactionRouter)
+app.use("/api/v1", router);
 
 const httpServer = createServer(app);
 

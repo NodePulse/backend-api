@@ -16,16 +16,14 @@ const generateToken = (userId: string) => {
 };
 
 const getImageUrl = (gender: string | undefined, username: string) => {
-  if(gender === "Male") {
-    return `https://avatar.iran.liara.run/public/boy?username=${username}`
+  if (gender === "Male") {
+    return `https://avatar.iran.liara.run/public/boy?username=${username}`;
+  } else if (gender === "Female") {
+    return `https://avatar.iran.liara.run/public/girl?username=${username}`;
+  } else {
+    return `https://avatar.iran.liara.run/username?username=${username}&length=1`;
   }
-  else if(gender === "Female") {
-    return `https://avatar.iran.liara.run/public/girl?username=${username}`
-  }
-  else {
-    return `https://avatar.iran.liara.run/username?username=${username}&length=1`
-  }
-}
+};
 
 export const register = async (req: Request, res: Response) => {
   const { email, username, password, gender } = req.body;
@@ -36,12 +34,12 @@ export const register = async (req: Request, res: Response) => {
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    if(!hashedPassword) {
+    if (!hashedPassword) {
       return res.status(400).json({ error: "Failed to create user." });
     }
-    const imageUrl = getImageUrl(gender, username)
+    const imageUrl = getImageUrl(gender, username);
     const newUser = await prisma.user.create({
-      data: { email, username, passwordHash: hashedPassword, image: imageUrl},
+      data: { email, username, passwordHash: hashedPassword, image: imageUrl },
       select: { id: true, email: true, name: true, role: true },
     });
 
@@ -53,7 +51,9 @@ export const register = async (req: Request, res: Response) => {
       sameSite: "none",
     });
 
-    return res.status(201).json({message: "User created successfully", data: newUser});
+    return res
+      .status(201)
+      .json({ message: "User created successfully", data: newUser });
   } catch (error) {
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -112,13 +112,20 @@ export const login = async (req: Request, res: Response) => {
 
 export const logout = (req: Request, res: Response) => {
   const userId = (req as any).user?.id;
-  console.log(userId)
 
-  res.cookie("token", "", {
-    httpOnly: true,
-    expires: new Date(0),
-  });
-  return res.status(200).json({ message: "Logged out successfully" });
+  if (!userId) {
+    return res.status(401).json({ error: "User not authenticated." });
+  }
+
+  try {
+    res.cookie("token", "", {
+      httpOnly: true,
+      expires: new Date(0),
+    });
+    return res.status(200).json({ message: "Logged out successfully" });
+  } catch (error) {
+    return res.status(500).json({ error: "Logout failed." });
+  }
 };
 
 export const getMe = async (req: Request, res: Response) => {
@@ -177,11 +184,9 @@ export const forgotPassword = async (req: Request, res: Response) => {
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res
-        .status(200)
-        .json({
-          message: "OTP sent successfully",
-        });
+      return res.status(200).json({
+        message: "OTP sent successfully",
+      });
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
