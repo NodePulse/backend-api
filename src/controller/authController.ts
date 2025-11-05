@@ -1,291 +1,796 @@
+// src/controller/authController.ts
 import type { Request, Response } from "express";
-import { Prisma } from "@prisma/client";
+import type { AuthenticatedRequest } from "../types/express.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import prisma from "../config/prisma.js";
 import nodemailer from "nodemailer";
+import { z } from "zod";
+import { createLogger, format, transports } from "winston";
+import prisma from "../config/prisma.js";
+import { ResponseBuilder } from "../utils/responseHandler.js";
+import { env } from "../config/env.js";
+import { ERROR_CODES } from "../constants/errorCodes.js";
+import { getImageUrl } from "@/utils/commonFunction.js";
 
-// const OTP_EXPIRY_MINUTES = 10;
-// const OTP_RESEND_COOLDOWN_MINUTES = 2;
-// const OTP_MAX_ATTEMPTS_PER_24H = 3;
+// Structured logger
+const logger = createLogger({
+  level: "info",
+  format: format.combine(format.timestamp(), format.json()),
+  transports: [new transports.Console()],
+});
 
-const generateToken = (userId: string) => {
-  return jwt.sign({ id: userId }, process.env.JWT_SECRET as string, {
-    expiresIn: "1d",
+const RegisterSchema = z
+  .object({
+    email: z.email({ error: "Invalid email address" }).trim().toLowerCase(),
+    username: z
+      .string({ error: "Username is required" })
+      .min(3, { error: "Username must be at least 3 characters" })
+      .max(50, { error: "Username cannot exceed 50 characters" })
+      .regex(/^[a-zA-Z0-9_]+$/, {
+        error: "Username can only contain letters, numbers, and underscores",
+      })
+      .trim(),
+    password: z
+      .string({ error: "Password is required" })
+      .min(8, { error: "Password must be at least 8 characters long" })
+      .max(20, { error: "Password cannot exceed 128 characters" })
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]*$/, {
+        error:
+          "Password must contain at least one lowercase letter, one uppercase letter, one digit, and can include @$!%*?&",
+      }),
+    gender: z.enum(["Male", "Female", "Other"], {
+      error: "Gender is required",
+    }),
+  })
+  .strict();
+
+const LoginSchema = z.object({
+  email: z.email({ error: "Invalid email address" }).trim().toLowerCase(),
+  password: z
+    .string({ error: "Password is required" })
+    .min(8, {
+      error: "Password must be at least 8 characters long",
+    })
+    .max(20, {
+      error: "Password cannot exceed 20 characters",
+    }),
+});
+
+const ChangePasswordSchema = z
+  .object({
+    oldPassword: z
+      .string({ error: "Old password is required" })
+      .min(8, {
+        error: "Old password must be at least 8 characters long",
+      })
+      .max(20, {
+        error: "Old password cannot exceed 20 characters",
+      }),
+    newPassword: z
+      .string({ error: "New password is required" })
+      .min(8, {
+        error: "New password must be at least 8 characters long",
+      })
+      .max(20, {
+        error: "New password cannot exceed 20 characters",
+      })
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/),
+    confirmPassword: z
+      .string({ error: "Confirm password is required" })
+      .min(8, {
+        error: "Confirm password must be at least 8 characters long",
+      })
+      .max(20, { error: "Confirm password cannot exceed 20 characters" }),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  })
+  .refine((data) => data.oldPassword !== data.newPassword, {
+    message: "New password must be different",
+    path: ["newPassword"],
+  });
+
+const ForgotPasswordSchema = z.object({
+  email: z.email({ error: "Invalid email address" }).trim().toLowerCase(),
+});
+
+const VerifyOtpSchema = z.object({
+  email: z.email({ error: "Invalid email address" }).trim().toLowerCase(),
+  otp: z
+    .string({ error: "OTP is required" })
+    .length(6, { error: "OTP must be 6 digits long" }),
+});
+
+const ChangeForgotPasswordSchema = z
+  .object({
+    email: z.email({ error: "Invalid email address" }).trim().toLowerCase(),
+    otp: z
+      .string({ error: "OTP is required" })
+      .length(6, { error: "OTP must be 6 digits long" }),
+    newPassword: z
+      .string({ error: "New password is required" })
+      .min(8, { error: "New password must be at least 8 characters long" })
+      .max(20, { error: "New password cannot exceed 20 characters" })
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/),
+    confirmPassword: z.string().min(8),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+// Centralized cookie settings
+const setCookie = (
+  res: Response,
+  token: string | "",
+  options: { clear?: boolean } = {}
+) => {
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: env.NODE_ENV === "production",
+    sameSite: env.NODE_ENV === "production" ? "none" : "lax",
+    maxAge: options.clear ? 0 : 24 * 60 * 60 * 1000,
+    expires: options.clear ? new Date(0) : undefined,
   });
 };
 
-const getImageUrl = (gender: string | undefined, username: string) => {
-  if (gender === "Male") {
-    return `https://avatar.iran.liara.run/public/boy?username=${username}`;
-  } else if (gender === "Female") {
-    return `https://avatar.iran.liara.run/public/girl?username=${username}`;
-  } else {
-    return `https://avatar.iran.liara.run/username?username=${username}&length=1`;
-  }
+// Validate environment variables
+if (!env.JWT_SECRET) throw new Error("JWT_SECRET is not defined");
+const emailConfig = {
+  user: env.EMAIL_USER,
+  pass: env.EMAIL_PASS,
 };
+if (!emailConfig.user || !emailConfig.pass)
+  throw new Error("Email configuration is incomplete");
 
+// Initialize nodemailer transporter
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: emailConfig,
+});
+
+// Generate JWT
+const generateToken = (userId: string) =>
+  jwt.sign({ id: userId }, env.JWT_SECRET, {
+    expiresIn: "1d",
+    algorithm: "HS256",
+  });
+
+/**
+ * Register a new user
+ * @route POST /api/v1/auth/users/register
+ */
 export const register = async (req: Request, res: Response) => {
-  const { email, username, password, gender } = req.body;
+  const requestId = crypto.randomUUID();
 
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+  // Validate input
+  const result = RegisterSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid registration input", {
+      requestId,
+      body: req.body,
+      errors,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  const { email, username, password, gender } = result.data;
+
+  // Check for existing user
+  const existingUser = await prisma.user.findUnique({ where: { email } });
+  if (existingUser) {
+    logger.warn("User already exists", { requestId, email });
+    return new ResponseBuilder(res)
+      .status(409)
+      .message("User already exists")
+      .withErrorCode(ERROR_CODES.USER_EXISTS)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  // Also Check for existing username
+  const existingUsername = await prisma.user.findUnique({
+    where: { username },
+  });
+  if (existingUsername) {
+    logger.warn("Username already exists", { requestId, username });
+    return new ResponseBuilder(res)
+      .status(409)
+      .message("Username already exists")
+      .withErrorCode(ERROR_CODES.USERNAME_EXISTS)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
-    if (!hashedPassword) {
-      return res.status(400).json({ error: "Failed to create user." });
-    }
     const imageUrl = getImageUrl(gender, username);
+
     const newUser = await prisma.user.create({
-      data: { email, username, passwordHash: hashedPassword, image: imageUrl },
-      select: { id: true, email: true, name: true, role: true },
+      data: {
+        email,
+        username,
+        passwordHash: hashedPassword,
+        image: imageUrl,
+        role: "USER",
+        gender,
+      },
+      select: {
+        id: true,
+        email: true,
+        username: true,
+        gender: true,
+        role: true,
+        image: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
     const token = generateToken(newUser.id);
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      sameSite: "none",
-    });
+    setCookie(res, token);
 
-    return res
+    logger.info("User registered successfully", {
+      requestId,
+      userId: newUser.id,
+    });
+    return new ResponseBuilder(res)
       .status(201)
-      .json({ message: "User created successfully", data: newUser });
+      .message("User registered successfully")
+      .withData({ ...newUser, token })
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    if (
-      error instanceof Prisma.PrismaClientKnownRequestError &&
-      error.code === "P2002"
-    ) {
-      return res
-        .status(409)
-        .json({ error: "A user with this email already exists." });
-    }
-    console.error(error);
-    return res.status(500).json({ error: "Failed to create user." });
+    logger.error("Registration error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to register user")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.REGISTRATION_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
+/**
+ * Log in a user
+ * @route POST /api/v1/auth/users/login
+ */
 export const login = async (req: Request, res: Response) => {
-  const { email, password } = req.body;
+  const requestId = crypto.randomUUID();
 
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
+  // Validate input
+  const result = LoginSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid login input", {
+      requestId,
+      errors,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Email and password are required")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
+  const { email, password } = result.data;
+
   try {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({
+      where: { email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        username: true,
+        gender: true,
+        image: true,
+        role: true,
+        passwordHash: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
     if (!user || !user.passwordHash) {
-      return res.status(401).json({ error: "Invalid credentials." });
+      logger.warn("Invalid credentials", { requestId, email });
+      return new ResponseBuilder(res)
+        .status(401)
+        .message("Invalid credentials")
+        .withErrorCode(ERROR_CODES.INVALID_CREDENTIALS)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
-      return res.status(401).json({ error: "Invalid credentials." });
+      logger.warn("Invalid password", { requestId, email });
+      return new ResponseBuilder(res)
+        .status(401)
+        .message("Invalid credentials")
+        .withErrorCode(ERROR_CODES.INVALID_CREDENTIALS)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
     const token = generateToken(user.id);
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 60 * 60 * 1000, // 1 day
-      sameSite: "none",
-    });
+    setCookie(res, token);
 
-    return res.status(200).json({
-      status: "success",
-      message: "User login successfully!",
-      data: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-      },
-    });
+    const responseData = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      name: user.name,
+      gender: user.gender,
+      image: user.image,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      token,
+    };
+
+    logger.info("User logged in successfully", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("User logged in successfully")
+      .withData(responseData)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: "Login failed." });
+    logger.error("Login error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to log in")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.LOGIN_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const logout = (req: Request, res: Response) => {
-  const userId = (req as any).user?.id;
+/**
+ * Log out a user
+ * @route POST /api/v1/auth/users/logout
+ */
+export const logout = (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
+  const user = req.user;
 
-  if (!userId) {
-    return res.status(401).json({ error: "User not authenticated." });
+  if (!user) {
+    logger.warn("Logout attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   try {
-    res.cookie("token", "", {
-      httpOnly: true,
-      expires: new Date(0),
-    });
-    return res.status(200).json({ message: "Logged out successfully" });
+    setCookie(res, "", { clear: true });
+    logger.info("User logged out successfully", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Logged out successfully")
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    return res.status(500).json({ error: "Logout failed." });
+    logger.error("Logout error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to log out")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.LOGOUT_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const getMe = async (req: Request, res: Response) => {
-  return res.status(200).json(req.user);
+/**
+ * Get authenticated user details
+ * @route GET /api/v1/auth/users/me
+ */
+export const getMe = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
+  const user = req.user;
+
+  if (!user) {
+    logger.warn("GetMe attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  logger.info("User details fetched", { requestId, userId: user.id });
+  return new ResponseBuilder(res)
+    .status(200)
+    .message("User details fetched successfully")
+    .withData(user)
+    .withRequestId(requestId)
+    .withLogging(env.NODE_ENV !== "production")
+    .send();
 };
 
-export const changePassword = async (req: Request, res: Response) => {
-  const { oldPassword, newPassword, confirmPassword } = req.body;
+/**
+ * Change authenticated user's password
+ * @route POST /api/v1/auth/users/change-password
+ */
+export const changePassword = async (
+  req: AuthenticatedRequest,
+  res: Response
+) => {
+  const requestId = crypto.randomUUID();
+  const user = req.user;
+
+  if (!user) {
+    logger.warn("Change password attempted without authentication", {
+      requestId,
+    });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  // Validate input
+  const result = ChangePasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid change password input", {
+      requestId,
+      errors: result.error.issues,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  const { oldPassword, newPassword } = result.data;
 
   try {
-    if (!oldPassword || !newPassword || !confirmPassword) {
-      return res.status(400).json({ error: "All fields are required." });
-    }
-
-    if (newPassword !== confirmPassword) {
-      return res
-        .status(401)
-        .json({ error: "New password and confirm password should be same" });
-    }
-
-    const userId = (req as any).user.id;
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) {
-      return res.status(404).json({
-        error: "User not found!",
+    const dbUser = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true },
+    });
+    if (!dbUser || !dbUser.passwordHash) {
+      logger.warn("User not found for password change", {
+        requestId,
+        userId: user.id,
       });
+      return new ResponseBuilder(res)
+        .status(404)
+        .message("User not found")
+        .withErrorCode(ERROR_CODES.USER_NOT_FOUND)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
-    const isMatch = await bcrypt.compare(oldPassword, user.passwordHash!);
+    const isMatch = await bcrypt.compare(oldPassword, dbUser.passwordHash);
     if (!isMatch) {
-      return res.status(401).json({ message: "Old password is incorrect" });
+      logger.warn("Incorrect old password", { requestId, userId: user.id });
+      return new ResponseBuilder(res)
+        .status(401)
+        .message("Old password is incorrect")
+        .withErrorCode(ERROR_CODES.INVALID_OLD_PASSWORD)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    if (!hashedPassword) {
-      return res.status(401).json({ message: "Old password is incorrect" });
-    }
-    // Update password in DB
     await prisma.user.update({
-      where: { id: userId },
+      where: { id: user.id },
       data: { passwordHash: hashedPassword },
     });
 
-    return res.status(200).json({ message: "Password updated successfully" });
+    logger.info("Password changed successfully", {
+      requestId,
+      userId: user.id,
+    });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Password updated successfully")
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    return res.status(500).json({ message: "Server error" });
+    logger.error("Change password error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to change password")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.CHANGE_PASSWORD_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
+/**
+ * Send password reset OTP
+ * @route POST /api/v1/auth/users/forgot-password
+ */
 export const forgotPassword = async (req: Request, res: Response) => {
-  const { email } = req.body;
-  if (!email) {
-    return res.status(400).json({ error: "Email is required." });
+  const requestId = crypto.randomUUID();
+
+  // Validate input
+  const result = ForgotPasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid forgot password input", {
+      requestId,
+      errors: result.error.issues,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
+
+  const { email } = result.data;
+
   try {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return res.status(200).json({
-        message: "OTP sent successfully",
-      });
+      logger.info(
+        "No user found for OTP, returning success to prevent enumeration",
+        { requestId, email }
+      );
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("OTP sent successfully")
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
     const hashedOTP = await bcrypt.hash(otp, 10);
 
-    await prisma.otp.deleteMany({ where: { email: email } });
-    await prisma.otp.create({
-      data: {
-        email: email,
-        code: hashedOTP,
-        expiresAt: new Date(Date.now() + 60 * 1000),
-      },
-    });
-
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS, // Gmail App Password
-      },
-    });
+    // Delete any existing OTPs for this email and create a new one.
+    await prisma.$transaction([
+      prisma.otp.deleteMany({ where: { email } }),
+      prisma.otp.create({
+        data: {
+          email,
+          code: hashedOTP,
+          expiresAt: new Date(Date.now() + 60 * 1000),
+        },
+      }),
+    ]);
 
     await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+      from: emailConfig.user,
       to: email,
       subject: "Password Reset OTP",
-      text: `Your OTP is ${otp}. It expires in 1 minutes.`,
+      text: `Your OTP is ${otp}. It expires in 1 minute.`,
     });
 
-    return res.status(200).json({ message: "OTP sent successfully" });
+    logger.info("OTP sent successfully", { requestId, email });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("OTP sent successfully")
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.log(error);
-    return res.status(500).json({ error: "Server error" });
+    logger.error("Forgot password error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to send OTP")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.OTP_SEND_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-const _verifyOtp = async (email: string, otp: string) => {
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) {
-    throw new Error("Invalid OTP!");
-  }
-
+/**
+ * Helper for verifying OTP
+ */
+const verifyOtp = async (email: string, otp: string) => {
   const storedOtp = await prisma.otp.findFirst({
-    where: { email: email, expiresAt: { gt: new Date() } },
+    where: { email, expiresAt: { gt: new Date() } },
     orderBy: { expiresAt: "desc" },
   });
 
   if (!storedOtp) {
-    throw new Error("OTP expired.");
+    logger.warn("OTP expired or not found", { email });
+    throw new Error("OTP expired or not found");
   }
 
   const isOtpValid = await bcrypt.compare(otp, storedOtp.code);
   if (!isOtpValid) {
-    throw new Error("Invalid OTP!");
+    logger.warn("Invalid OTP", { email });
+    throw new Error("Invalid OTP");
   }
 
   return storedOtp;
 };
 
+/**
+ * Verify password reset OTP
+ * @route POST /api/v1/auth/users/verify-otp
+ */
 export const verifyOTP = async (req: Request, res: Response) => {
-  const { email, otp } = req.body;
-  if (!email || !otp) {
-    return res.status(400).json({ error: "Email and OTP are required." });
+  const requestId = crypto.randomUUID();
+
+  // Validate input
+  const result = VerifyOtpSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid OTP verification input", {
+      requestId,
+      errors: result.error.issues,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
+
+  const { email, otp } = result.data;
+
   try {
-    await _verifyOtp(email, otp);
-    return res.status(200).json({ message: "OTP verified successfully" });
+    await verifyOtp(email, otp);
+    logger.info("OTP verified successfully", { requestId, email });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("OTP verified successfully")
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error: any) {
-    return res.status(400).json({ error: error.message });
+    logger.warn("OTP verification failed", { requestId, error: error.message });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message(error.message)
+      .withErrorCode(
+        error.message.includes("expired")
+          ? ERROR_CODES.OTP_EXPIRED
+          : ERROR_CODES.INVALID_OTP
+      )
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
+/**
+ * Change password using OTP
+ * @route POST /api/v1/auth/users/change-forgot-password
+ */
 export const changeForgotPassword = async (req: Request, res: Response) => {
-  const { email, otp, newPassword, confirmPassword } = req.body;
-  if (!email || !otp || !newPassword || !confirmPassword) {
-    return res.status(400).json({ error: "All fields are required." });
+  const requestId = crypto.randomUUID();
+
+  // Validate input
+  const result = ChangeForgotPasswordSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid change forgot password input", {
+      requestId,
+      errors: result.error.issues,
+    });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
-  if (newPassword !== confirmPassword) {
-    return res
-      .status(400)
-      .json({ error: "New password and confirm password must match." });
-  }
+  const { email, otp, newPassword } = result.data;
 
   try {
-    const storedOtp = await _verifyOtp(email, otp);
-
+    const storedOtp = await verifyOtp(email, otp);
     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
     await prisma.user.update({
       where: { email },
       data: { passwordHash: hashedPassword },
     });
-
     await prisma.otp.delete({ where: { id: storedOtp.id } });
 
-    return res.status(200).json({ message: "Password changed successfully." });
+    logger.info("Password changed successfully via OTP", { requestId, email });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Password changed successfully")
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error: any) {
-    console.error(error);
-    return res.status(500).json({ error: error.message });
+    logger.warn("Change forgot password error", {
+      requestId,
+      error: error.message,
+    });
+    return new ResponseBuilder(res)
+      .status(
+        error.message.includes("expired") || error.message.includes("OTP")
+          ? 400
+          : 500
+      )
+      .message(
+        error.message.includes("expired")
+          ? "OTP expired"
+          : error.message.includes("OTP")
+          ? "Invalid OTP"
+          : "Failed to change password"
+      )
+      .withError(error as Error)
+      .withErrorCode(
+        error.message.includes("expired")
+          ? ERROR_CODES.OTP_EXPIRED
+          : error.message.includes("OTP")
+          ? ERROR_CODES.INVALID_OTP
+          : ERROR_CODES.CHANGE_PASSWORD_ERROR
+      )
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };

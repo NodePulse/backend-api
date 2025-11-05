@@ -1,4 +1,12 @@
-import { checkEventRegistration, createEvent, eventRegister, getAllEvents, getEventAttendees, getEventById, getMyEvents } from "../controller/eventController.js";
+import {
+  checkEventRegistration,
+  createEvent,
+  eventRegister,
+  getAllEvents,
+  getEventAttendees,
+  getEventById,
+  getMyEvents,
+} from "../controller/eventController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { Router } from "express";
 import multer from "multer";
@@ -15,11 +23,11 @@ eventRouter.post(
   ]),
   createEvent
 );
-eventRouter.get("/get", protect, getMyEvents)
-eventRouter.get("/all", protect, getAllEvents)
-eventRouter.get("/:id", protect, getEventById)
-eventRouter.post("/:id/register", protect, eventRegister)
-eventRouter.get("/:id/registered", protect, checkEventRegistration)
-eventRouter.get("/:id/attendees", protect, getEventAttendees)
+eventRouter.get("/get", protect, getMyEvents);
+eventRouter.get("/all", protect, getAllEvents);
+eventRouter.get("/:id", protect, getEventById);
+eventRouter.post("/:id/register", protect, eventRegister);
+eventRouter.get("/:id/registered", protect, checkEventRegistration);
+eventRouter.get("/:id/attendees", protect, getEventAttendees);
 
 export default eventRouter;

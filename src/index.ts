@@ -1,53 +1,115 @@
+// src/index.ts
 import express from "express";
-// Explicitly import types using the `import type` syntax.
-// This makes it clear to the compiler that these are not runtime values.
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import cookieParser from "cookie-parser";
 import cors, { CorsOptions } from "cors";
+import compression from "compression";
 import { Server } from "socket.io";
 import { createServer } from "http";
+import { createLogger, format, transports } from "winston";
+import crypto from "crypto";
 import { initializeSocket } from "./utils/socketHandler.js";
 import router from "./routes/index.js";
-
+import { ResponseBuilder } from "./utils/responseHandler.js";
+import { env } from "./config/env.js";
+import { swaggerSpec } from "./config/swagger.js";
 import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./docs/swaggerDef.js";
 
-// Initialize the Express application
-const app = express();
-const PORT: number = 8080;
-
-const options: CorsOptions = {
-  origin: ["http://localhost:3000", "http://localhost:3001"],
-  credentials: true
-};
-
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-app.use(express.json());
-app.use(cookieParser());
-app.use(cors(options));
-
-// Define a route handler for the root URL ('/')
-app.get("/", (_req: Request, res: Response) => {
-  // Send a JSON response
-  return res.status(200).json({ Hello: "World" });
+// Initialize logger
+const logger = createLogger({
+  level: "info",
+  format: format.combine(format.timestamp(), format.json()),
+  transports: [new transports.Console()],
 });
 
+// Initialize Express application
+const app = express();
+const PORT = env.PORT;
+const CLIENT_URL = env.CLIENT_URL;
+
+// Centralized CORS configuration
+const corsOrigins = [CLIENT_URL, "http://localhost:3001"];
+const corsOptions: CorsOptions = {
+  origin: corsOrigins,
+  credentials: true,
+};
+
+// Middleware
+app.use(compression()); // Enable gzip compression
+app.use(express.json());
+app.use(cookieParser());
+app.use(cors(corsOptions));
+app.use((req, res, next) => {
+  res.locals.startTime = process.hrtime(); // For ResponseBuilder timing
+  next();
+});
+
+// Error-handling middleware
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  const requestId = crypto.randomUUID();
+  if (err.status === 400 && err.errors) {
+    const errors = err.errors.map((e: any) => ({
+      field:
+        e.path?.split("/").pop() ||
+        e.instancePath?.replace(/^\//, "") ||
+        "unknown",
+      issue: e.message,
+      path: e.path || e.instancePath || "unknown",
+    }));
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode("INVALID_INPUT")
+      .withRequestId(requestId)
+      .withRequestContext({ method: req.method, url: req.originalUrl })
+      .withLogging(true)
+      .send();
+  }
+
+  // Handle generic errors
+  logger.error("Unexpected error", {
+    error: err.message,
+    stack: err.stack,
+    method: req.method,
+    url: req.originalUrl,
+    requestId,
+  });
+  return ResponseBuilder.serverError(res, err, {
+    message: "Internal server error",
+    headers: { "X-Error-Type": "Unexpected" },
+  });
+});
+
+// Root route
+app.get("/", (_req: Request, res: Response) => {
+  ResponseBuilder.ok(
+    res,
+    { Hello: "World" },
+    { message: "Welcome to the API" }
+  );
+});
+
+// API routes
 app.use("/api/v1", router);
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
+// Initialize HTTP and Socket.IO servers
 const httpServer = createServer(app);
-
 const io = new Server(httpServer, {
-  // 3. Configure CORS to allow your frontend origin
   cors: {
-    origin: [process.env.CLIENT_URL || "http://localhost:3000", "http://localhost:3001"], // Your Next.js app URL
+    origin: corsOrigins,
     methods: ["GET", "POST"],
   },
 });
 
 initializeSocket(io);
 
-// Start the server and listen for connections on the specified port
+// Start the server
 httpServer.listen(PORT, () => {
-  console.log(`[server]: Server running at http://localhost:${PORT}`);
+  logger.info(`Server running`, {
+    environment: env.NODE_ENV,
+    port: PORT,
+    url: `http://localhost:${PORT}`,
+  });
 });

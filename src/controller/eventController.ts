@@ -4,6 +4,7 @@ import { uploadFileToR2 } from "./uploadController.js";
 import { validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import { generateTransactionId } from "../utils/commonFunction.js";
+import { razorpay } from "@/config/razorpay.js";
 
 /**
  * @desc    Create a new event
@@ -429,7 +430,7 @@ export const eventRegister = async (req: Request, res: Response) => {
     const isFreeEvent = !event.price || Number(event.price) <= 0;
 
     if (isFreeEvent) {
-      console.log(amount, currency)
+      console.log(amount, currency);
       // FREE event: register directly
       if (Number(amount) !== 0 || !currency) {
         return res
@@ -470,16 +471,31 @@ export const eventRegister = async (req: Request, res: Response) => {
           .json({ error: "Payment details are required for paid events." });
       }
 
-      // Simulate payment success/failure randomly
-      const paymentSuccess = Math.random() > 0.2; // 80% chance success, 20% fail
+      // Ensure the amount from the request matches the event price
+      if (Number(amount) !== Number(event.price)) {
+        return res.status(400).json({
+          error: `The provided amount (${amount}) does not match the event price (${event.price}).`,
+        });
+      }
+      const orderOptions = {
+        amount: amount * 100,
+        currency,
+        receipt: `rcpt_${Date.now()}`, // FIX: Shortened receipt to be under 40 chars
+        notes: {
+          eventId,
+          userId,
+        },
+      };
+
+      const order = await razorpay.orders.create(orderOptions);
 
       const payment = await prisma.payment.create({
         data: {
           amount,
           currency,
-          status: paymentSuccess ? "COMPLETED" : "FAILED",
-          transactionId: "TXN_" + Math.random().toString(36).substring(2, 15),
-          paymentGateway: "mock",
+          status: "PENDING",
+          transactionId: order.id,
+          paymentGateway: "razorpay",
           userId,
           eventId,
           cardLast4: last4,
@@ -493,21 +509,10 @@ export const eventRegister = async (req: Request, res: Response) => {
         },
       });
 
-      if (!paymentSuccess) {
-        return res.status(402).json({
-          error: "Payment failed. Please try again.",
-          paymentId: payment.id,
-        });
-      }
-
-      // Register attendee in a transaction
-      await prisma.$transaction(async (tx) => {
-        await tx.attendee.create({ data: { userId, eventId } });
-      });
-
       return res.status(200).json({
-        message: "Registration and payment successful.",
+        message: "Order created successfully. Proceed with payment.",
         paymentId: payment.id,
+        order,
       });
     }
   } catch (error) {

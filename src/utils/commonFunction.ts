@@ -15,3 +15,11 @@ export const generateTransactionId = (eventId: string, userId: string) => {
   const timestamp = Date.now();
   return `TXN_${randomStr}_${eventId}_${userId}_${timestamp}`;
 };
+
+export const getImageUrl = (gender: string, username: string) => {
+  if (gender === "Male")
+    return `https://avatar.iran.liara.run/public/boy?username=${username}`;
+  if (gender === "Female")
+    return `https://avatar.iran.liara.run/public/girl?username=${username}`;
+  return `https://avatar.iran.liara.run/username?username=${username}&length=1`;
+};
