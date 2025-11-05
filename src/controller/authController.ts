@@ -10,7 +10,7 @@ import prisma from "../config/prisma.js";
 import { ResponseBuilder } from "../utils/responseHandler.js";
 import { env } from "../config/env.js";
 import { ERROR_CODES } from "../constants/errorCodes.js";
-import { getImageUrl } from "@/utils/commonFunction.js";
+import { getImageUrl } from "../utils/commonFunction.js";
 
 // Structured logger
 const logger = createLogger({

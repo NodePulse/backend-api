@@ -10,7 +10,7 @@ import crypto from "crypto";
 import prisma from "../config/prisma.js";
 import { createLogger, format, transports } from "winston";
 import { ResponseBuilder } from "../utils/responseHandler.js";
-import { getCache, setCache } from "@/utils/chache.js";
+import { getCache, setCache } from "../utils/chache.js";
 // import { ERROR_CODES } from "../constants/errorCodes.js";
 
 // Structured logger
