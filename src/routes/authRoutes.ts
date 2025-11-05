@@ -10,7 +10,7 @@ import {
   verifyOTP,
   changeForgotPassword,
 } from "../controller/authController.js";
-import { protect } from "@/middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const authRouter = Router();
 
