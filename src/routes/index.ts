@@ -9,7 +9,7 @@ import transactionRouter from "./transactionRoutes.js";
 import { createLogger, format, transports } from "winston";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { protect } from "@/middleware/authMiddleware.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 // Logger for route activity
 const logger = createLogger({
