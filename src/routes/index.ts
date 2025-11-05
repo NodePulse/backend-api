@@ -1,7 +1,7 @@
 // src/routes/index.ts
 import { Router } from "express";
 import authRouter from "./authRoutes.js";
-import accountRouter from "./accountRoutes.js";
+// import accountRouter from "./accountRoutes.js";
 import adminRouter from "./adminRoutes.js";
 import eventRouter from "./eventRoutes.js";
 import userRouter from "./userRoutes.js";
@@ -9,7 +9,7 @@ import transactionRouter from "./transactionRoutes.js";
 import { createLogger, format, transports } from "winston";
 import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { protect, authorize } from "@/middleware/authMiddleware.js";
+import { protect } from "@/middleware/authMiddleware.js";
 
 // Logger for route activity
 const logger = createLogger({
@@ -27,6 +27,7 @@ router.use((req: Request, res: Response, next: NextFunction) => {
     url: req.originalUrl,
     requestId: crypto.randomUUID(),
   });
+  res.locals.startTime = process.hrtime();
   next();
 });
 

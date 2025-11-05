@@ -1,6 +1,6 @@
 // src/index.ts
 import express from "express";
-import type { Request, Response, NextFunction } from "express";
+import type { Request, Response } from "express";
 import cookieParser from "cookie-parser";
 import cors, { CorsOptions } from "cors";
 import compression from "compression";
@@ -40,12 +40,14 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(cors(corsOptions));
 app.use((req, res, next) => {
+  // use req to not throw error
+  console.log(req)
   res.locals.startTime = process.hrtime(); // For ResponseBuilder timing
   next();
 });
 
 // Error-handling middleware
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+app.use((err: any, req: Request, res: Response) => {
   const requestId = crypto.randomUUID();
   if (err.status === 400 && err.errors) {
     const errors = err.errors.map((e: any) => ({
