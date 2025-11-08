@@ -1,16 +1,16 @@
 # Evently - Complete Feature Roadmap
 
 ## Table of Contents
-- [Critical Features (Must Have Before Launch)](#critical-features-must-have-before-launch)
-- [High Priority Features (1-2 Months Post-Launch)](#high-priority-features-1-2-months-post-launch)
-- [Medium Priority Features (3-6 Months Post-Launch)](#medium-priority-features-3-6-months-post-launch)
-- [Future Features (6+ Months)](#future-features-6-months)
+- [Critical Features](#critical-features)
+- [High Priority Features](#high-priority-features)
+- [Medium Priority Features](#medium-priority-features)
+- [Future Features](#future-features)
 - [Technical Improvements](#technical-improvements)
 - [Implementation Timeline](#implementation-timeline)
 
 ---
 
-## Critical Features (Must Have Before Launch)
+## Critical Features
 
 ### 1. Email Notifications 📧
 **Priority: CRITICAL**
@@ -179,7 +179,7 @@
 
 ---
 
-## High Priority Features (1-2 Months Post-Launch)
+## High Priority Features
 
 ### 9. Add to Calendar Integration 📅
 
@@ -305,7 +305,7 @@
 
 ---
 
-## Medium Priority Features (3-6 Months Post-Launch)
+## Medium Priority Features
 
 ### 15. Reviews & Ratings ⭐
 
@@ -628,7 +628,7 @@
 
 ---
 
-## Future Features (6+ Months)
+## Future Features
 
 ### 31. Virtual & Hybrid Events 🖥️
 
@@ -880,7 +880,7 @@
 
 ## Implementation Timeline
 
-### Phase 1: MVP (Weeks 1-8)
+### Phase 1: MVP
 
 **Weeks 1-2: Critical Communications**
 - ✅ Email notification system
@@ -905,7 +905,7 @@
 
 ---
 
-### Phase 2: Growth (Months 3-6)
+### Phase 2: Growth
 
 **Month 3:**
 - ✅ Reviews & ratings
@@ -929,7 +929,7 @@
 
 ---
 
-### Phase 3: Scale (Months 6-12)
+### Phase 3: Scale
 
 **Months 6-9:**
 - ✅ Recurring events
@@ -945,7 +945,7 @@
 
 ---
 
-### Phase 4: Enterprise (Year 2+)
+### Phase 4: Enterprise
 
 - ✅ White-label solutions
 - ✅ CRM integrations
@@ -956,7 +956,7 @@
 
 ## Priority Summary
 
-### Must Implement (Before Launch):
+### Must Implement:
 1. Email notifications
 2. Payment system with receipts
 3. Basic analytics for organizers
@@ -966,7 +966,7 @@
 7. Image upload & optimization
 8. Refund/cancellation policy
 
-### Should Implement (First 2 Months):
+### Should Implement:
 9. Add to calendar
 10. QR code tickets
 11. Social sharing
@@ -974,33 +974,14 @@
 13. Promo codes
 14. Draft/publish system
 
-### Nice to Have (3-6 Months):
+### Nice to Have:
 15-30. Reviews, favorites, notifications, waitlist, multi-currency, admin tools, templates, recurring events, co-organizers, analytics, custom forms, surveys, etc.
 
-### Future Considerations (6+ Months):
+### Future Considerations:
 31-40. Virtual events, mobile app, AI, CRM, white-label, seating, multi-language, merchandise, sponsors, volunteers
 
 ---
 
-## Notes
-
-- **Free Tier Recommendations:**
-  - Email: Resend (3,000/month) or Brevo (9,000/month)
-  - Payment: Razorpay test mode (unlimited), live mode (2% fee)
-  - Images: Cloudinary/ImageKit free tier
-  - Hosting: Vercel free tier
-
-- **Estimated Development Time:**
-  - MVP (Critical features): 8-10 weeks
-  - Growth features: 6 months
-  - Enterprise features: 12+ months
-
-- **Team Size:**
-  - Solo developer: Follow timeline above
-  - 2-3 developers: Reduce time by 40-50%
-  - Full team (5+): Parallel development, reduce by 60-70%
-
----
 
 *Last Updated: November 2025*
 *Status Legend: ⏳ Not Implemented | 🚧 In Progress | ✅ Completed*
