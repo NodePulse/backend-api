@@ -1,0 +1,248 @@
+# Render Blueprint for Microservices Architecture
+# This file automates the deployment of all services
+# Place this file at: /backend/microservices/render.yaml
+
+services:
+  # ============================================
+  # API GATEWAY - Public Entry Point
+  # ============================================
+  - type: web
+    name: api-gateway
+    env: docker
+    region: oregon
+    plan: starter  # $7/month, or change to 'free'
+    rootDir: api-gateway
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # Service URLs will be auto-populated by Render
+      - key: AUTH_SERVICE_URL
+        fromService:
+          name: auth-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: USER_SERVICE_URL
+        fromService:
+          name: user-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: EVENT_SERVICE_URL
+        fromService:
+          name: event-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: TRANSACTION_SERVICE_URL
+        fromService:
+          name: transaction-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: ADMIN_SERVICE_URL
+        fromService:
+          name: admin-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: UPLOAD_SERVICE_URL
+        fromService:
+          name: upload-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
+
+  # ============================================
+  # AUTH SERVICE
+  # ============================================
+  - type: web
+    name: auth-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: auth-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evently-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false  # Add manually or from Redis service
+      - key: JWT_SECRET
+        generateValue: true
+        length: 64
+      - key: ENCRYPTION_KEY
+        generateValue: true
+        length: 64
+      - key: EMAIL_USER
+        sync: false  # Add manually
+      - key: EMAIL_PASS
+        sync: false  # Add manually
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
+
+  # ============================================
+  # USER SERVICE
+  # ============================================
+  - type: web
+    name: user-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: user-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3002
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evently-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: AUTH_SERVICE_URL
+        fromService:
+          name: auth-service
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+
+  # ============================================
+  # EVENT SERVICE
+  # ============================================
+  - type: web
+    name: event-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: event-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3003
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evently-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+
+  # ============================================
+  # TRANSACTION SERVICE
+  # ============================================
+  - type: web
+    name: transaction-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: transaction-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3004
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evently-postgres
+          property: connectionString
+      - key: REDIS_URL
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false  # Add manually
+      - key: RAZORPAY_KEY_SECRET
+        sync: false  # Add manually
+
+  # ============================================
+  # ADMIN SERVICE
+  # ============================================
+  - type: web
+    name: admin-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: admin-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3005
+      - key: DATABASE_URL
+        fromDatabase:
+          name: evently-postgres
+          property: connectionString
+
+  # ============================================
+  # UPLOAD SERVICE
+  # ============================================
+  - type: web
+    name: upload-service
+    env: docker
+    region: oregon
+    plan: starter
+    rootDir: upload-service
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3006
+      - key: R2_BUCKET
+        sync: false  # Add manually
+      - key: R2_ENDPOINT
+        sync: false  # Add manually
+      - key: R2_ACCESS_KEY_ID
+        sync: false  # Add manually
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false  # Add manually
+      - key: R2_PUBLIC_URL
+        sync: false  # Add manually
+
+# ============================================
+# SHARED DATABASE
+# ============================================
+databases:
+  - name: evently-postgres
+    databaseName: evently_db
+    user: admin
+    region: oregon
+    plan: starter  # $7/month, or 'free' for 90-day trial
+    ipAllowList: []  # Allow all IPs (or specify)
+
+# ============================================
+# NOTES:
+# ============================================
+# 1. Update CLIENT_URL values after deploying frontend
+# 2. Add manual environment variables marked with "sync: false"
+# 3. For Redis, either:
+#    - Use Upstash (free): https://upstash.com/
+#    - Add Render Redis service here (costs $7/month)
+# 4. Deployment order:
+#    - Database creates first
+#    - Then all services deploy in parallel
+#    - API Gateway deploys last (depends on all services)
+# 5. To deploy: Push this file to your repo, Render auto-detects it
+
