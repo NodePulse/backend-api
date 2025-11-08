@@ -1,7 +1,7 @@
 // src/utils/responseHandler.ts
 import { Response } from "express";
 import { createLogger, format, transports } from "winston";
-import { STATUS_MESSAGES } from "../constants/statusCodes.js"; // Centralized status codes
+import { STATUS_MESSAGES } from "../constants/statusCodes"; // Centralized status codes
 import { z } from "zod";
 // import { Ajv } from "ajv";
 import crypto from "crypto";

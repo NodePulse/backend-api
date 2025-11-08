@@ -1,6 +1,6 @@
 # Microservices Architecture
 
-This directory contains the microservices implementation of the monolithic backend application. The monolithic code remains intact in the parent directory.
+This directory contains the microservices implementation of the backend application.
 
 ## Architecture Overview
 
@@ -12,7 +12,8 @@ The application has been split into the following microservices:
 4. **transaction-service** (Port 3004) - Payment processing, transaction history
 5. **admin-service** (Port 3005) - Admin authentication and management
 6. **upload-service** (Port 3006) - File uploads (images, videos)
-7. **api-gateway** (Port 3000) - API Gateway that routes requests to appropriate services
+
+**Note:** Frontend applications should call each service directly at their respective endpoints.
 
 ## Shared Resources
 
@@ -48,8 +49,7 @@ docker-compose up -d
 This will start all services including:
 - PostgreSQL database
 - Redis cache
-- All microservices
-- API Gateway
+- All 6 microservices
 
 ## Running Individual Services Locally
 
@@ -61,16 +61,18 @@ npm install
 npm run dev
 ```
 
-## API Gateway
+## API Endpoints
 
-The API Gateway runs on port 3000 and routes requests to the appropriate microservices:
+Each service exposes its own REST API endpoints:
 
-- `/api/v1/auth/users/*` → auth-service
-- `/api/v1/users/*` → user-service
-- `/api/v1/events/*` → event-service
-- `/api/v1/transactions/*` → transaction-service
-- `/api/v1/auth/admins/*` → admin-service
-- `/api/v1/upload/*` → upload-service
+- **auth-service**: `/api/v1/auth/users/*`
+- **user-service**: `/api/v1/users/*`
+- **event-service**: `/api/v1/events/*`
+- **transaction-service**: `/api/v1/transactions/*`
+- **admin-service**: `/api/v1/auth/admins/*`
+- **upload-service**: `/api/v1/upload/*`
+
+Frontend applications should call each service directly at its respective URL.
 
 ## Health Checks
 
@@ -81,7 +83,6 @@ Each service exposes a `/health` endpoint:
 - `http://localhost:3004/health` - transaction-service
 - `http://localhost:3005/health` - admin-service
 - `http://localhost:3006/health` - upload-service
-- `http://localhost:3000/health` - api-gateway
 
 ## Notes
 

@@ -4,12 +4,12 @@ import swaggerUi from "swagger-ui-express";
 import cookieParser from "cookie-parser";
 import cors, { CorsOptions } from "cors";
 import compression from "compression";
-import authRouter from "./routes/authRoutes.js";
-import { createValidationErrorHandler, createDefaultErrorHandler, logger } from "../shared/utils/appSetup.js";
-import { ResponseBuilder } from "../shared/utils/responseHandler.js";
-import { env } from "../shared/config/env.js";
-import { swaggerSpec } from "./config/swagger.js";
-import { encryptResponseMiddleware } from "./middleware/encryptResponse.js";
+import authRouter from "./routes/authRoutes";
+import { createValidationErrorHandler, createDefaultErrorHandler, logger } from "../shared/utils/appSetup";
+import { ResponseBuilder } from "../shared/utils/responseHandler";
+import { env } from "../shared/config/env";
+import { swaggerSpec } from "./config/swagger";
+import { encryptResponseMiddleware } from "./middleware/encryptResponse";
 
 const PORT = env.PORT || 3001;
 

@@ -4,8 +4,8 @@ import cors, { type CorsOptions } from "cors";
 import compression from "compression";
 import { createLogger, format, transports } from "winston";
 import crypto from "crypto";
-import { ResponseBuilder } from "./responseHandler.js";
-import { env } from "../config/env.js";
+import { ResponseBuilder } from "./responseHandler";
+import { env } from "../config/env";
 
 // Shared logger instance
 export const logger = createLogger({

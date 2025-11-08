@@ -3,15 +3,15 @@ import type { NextFunction, Response } from "express";
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
-} from "../../shared/types/express.js";
+} from "../../shared/types/express";
 import jwt, { JwtPayload as JwtPayloadOriginal } from "jsonwebtoken";
 import { z } from "zod";
 import crypto from "crypto";
-import prisma from "../../shared/config/prisma.js";
+import prisma from "../../shared/config/prisma";
 import { createLogger, format, transports } from "winston";
-import { ResponseBuilder } from "../../shared/utils/responseHandler.js";
-import { getCache, setCache } from "../../shared/utils/cache.js";
-// import { ERROR_CODES } from "../constants/errorCodes.js";
+import { ResponseBuilder } from "../../shared/utils/responseHandler";
+import { getCache, setCache } from "../../shared/utils/cache";
+// import { ERROR_CODES } from "../constants/errorCodes";
 
 // Structured logger
 const logger = createLogger({

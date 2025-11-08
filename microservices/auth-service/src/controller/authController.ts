@@ -1,16 +1,16 @@
 // src/controller/authController.ts
 import type { Request, Response } from "express";
-import type { AuthenticatedRequest } from "../../shared/types/express.js";
+import type { AuthenticatedRequest } from "../../shared/types/express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { createLogger, format, transports } from "winston";
-import prisma from "../../shared/config/prisma.js";
-import { ResponseBuilder } from "../../shared/utils/responseHandler.js";
-import { env } from "../../shared/config/env.js";
-import { ERROR_CODES } from "../../shared/constants/errorCodes.js";
-import { getImageUrl } from "../../shared/utils/commonFunction.js";
+import prisma from "../../shared/config/prisma";
+import { ResponseBuilder } from "../../shared/utils/responseHandler";
+import { env } from "../../shared/config/env";
+import { ERROR_CODES } from "../../shared/constants/errorCodes";
+import { getImageUrl } from "../../shared/utils/commonFunction";
 
 // Structured logger
 const logger = createLogger({

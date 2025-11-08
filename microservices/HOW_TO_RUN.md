@@ -69,7 +69,6 @@ Each service runs on a different port:
 - **transaction-service**: 3004
 - **admin-service**: 3005
 - **upload-service**: 3006
-- **api-gateway**: 3000
 
 ## Running Specific Services
 
@@ -119,14 +118,6 @@ cd microservices/upload-service
 npm install
 ln -sf ../shared shared
 PORT=3006 npx tsx src/index.ts
-```
-
-### API Gateway
-```bash
-cd microservices/api-gateway
-npm install
-ln -sf ../shared shared
-PORT=3000 npx tsx src/index.ts
 ```
 
 ## Required Environment Variables

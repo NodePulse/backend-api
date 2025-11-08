@@ -1,0 +1,29 @@
+{
+  "name": "shared",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Shared utilities and configurations for microservices",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@prisma/client": "^6.16.2",
+    "compression": "^1.8.1",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "ioredis": "^5.8.2",
+    "jsonwebtoken": "^9.0.2",
+    "razorpay": "^2.9.4",
+    "winston": "^3.18.3",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/compression": "^1.8.1",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.10",
+    "prisma": "^6.19.0",
+    "typescript": "^5.3.3"
+  }
+}

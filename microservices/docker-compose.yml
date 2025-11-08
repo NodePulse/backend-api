@@ -28,8 +28,8 @@ services:
   # Auth Service
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./auth-service/Dockerfile
     container_name: auth-service
     ports:
       - "3001:3001"
@@ -48,8 +48,8 @@ services:
   # User Service
   user-service:
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./user-service/Dockerfile
     container_name: user-service
     ports:
       - "3002:3002"
@@ -68,8 +68,8 @@ services:
   # Event Service
   event-service:
     build:
-      context: ./event-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./event-service/Dockerfile
     container_name: event-service
     ports:
       - "3003:3003"
@@ -88,8 +88,8 @@ services:
   # Transaction Service
   transaction-service:
     build:
-      context: ./transaction-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./transaction-service/Dockerfile
     container_name: transaction-service
     ports:
       - "3004:3004"
@@ -108,8 +108,8 @@ services:
   # Admin Service
   admin-service:
     build:
-      context: ./admin-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./admin-service/Dockerfile
     container_name: admin-service
     ports:
       - "3005:3005"
@@ -126,8 +126,8 @@ services:
   # Upload Service
   upload-service:
     build:
-      context: ./upload-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./upload-service/Dockerfile
     container_name: upload-service
     ports:
       - "3006:3006"
@@ -135,34 +135,6 @@ services:
       - ../.env
     environment:
       - PORT=3006
-    networks:
-      - microservices-network
-
-  # API Gateway
-  api-gateway:
-    build:
-      context: ./api-gateway
-      dockerfile: Dockerfile
-    container_name: api-gateway
-    ports:
-      - "3000:3000"
-    env_file:
-      - ../.env
-    environment:
-      - PORT=3000
-      - AUTH_SERVICE_URL=http://auth-service:3001
-      - USER_SERVICE_URL=http://user-service:3002
-      - EVENT_SERVICE_URL=http://event-service:3003
-      - TRANSACTION_SERVICE_URL=http://transaction-service:3004
-      - ADMIN_SERVICE_URL=http://admin-service:3005
-      - UPLOAD_SERVICE_URL=http://upload-service:3006
-    depends_on:
-      - auth-service
-      - user-service
-      - event-service
-      - transaction-service
-      - admin-service
-      - upload-service
     networks:
       - microservices-network
 

@@ -1,5 +1,5 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
-import { env } from "../config/env.js";
+import { env } from "../config/env";
 
 const BUCKET_NAME = env.R2_BUCKET!;
 

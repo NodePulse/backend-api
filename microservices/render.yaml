@@ -4,57 +4,6 @@
 
 services:
   # ============================================
-  # API GATEWAY - Public Entry Point
-  # ============================================
-  - type: web
-    name: api-gateway
-    env: docker
-    region: oregon
-    plan: starter  # $7/month, or change to 'free'
-    rootDir: api-gateway
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 3000
-      # Service URLs will be auto-populated by Render
-      - key: AUTH_SERVICE_URL
-        fromService:
-          name: auth-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: USER_SERVICE_URL
-        fromService:
-          name: user-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: EVENT_SERVICE_URL
-        fromService:
-          name: event-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: TRANSACTION_SERVICE_URL
-        fromService:
-          name: transaction-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: ADMIN_SERVICE_URL
-        fromService:
-          name: admin-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: UPLOAD_SERVICE_URL
-        fromService:
-          name: upload-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: CLIENT_URL
-        value: https://your-frontend.onrender.com  # Update this
-
-  # ============================================
   # AUTH SERVICE
   # ============================================
   - type: web
@@ -113,11 +62,8 @@ services:
           property: connectionString
       - key: REDIS_URL
         sync: false
-      - key: AUTH_SERVICE_URL
-        fromService:
-          name: auth-service
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
 
   # ============================================
   # EVENT SERVICE
@@ -142,6 +88,8 @@ services:
           property: connectionString
       - key: REDIS_URL
         sync: false
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
 
   # ============================================
   # TRANSACTION SERVICE
@@ -170,6 +118,8 @@ services:
         sync: false  # Add manually
       - key: RAZORPAY_KEY_SECRET
         sync: false  # Add manually
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
 
   # ============================================
   # ADMIN SERVICE
@@ -192,6 +142,8 @@ services:
         fromDatabase:
           name: evently-postgres
           property: connectionString
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
 
   # ============================================
   # UPLOAD SERVICE
@@ -220,6 +172,8 @@ services:
         sync: false  # Add manually
       - key: R2_PUBLIC_URL
         sync: false  # Add manually
+      - key: CLIENT_URL
+        value: https://your-frontend.onrender.com  # Update this
 
 # ============================================
 # SHARED DATABASE
@@ -242,7 +196,14 @@ databases:
 #    - Add Render Redis service here (costs $7/month)
 # 4. Deployment order:
 #    - Database creates first
-#    - Then all services deploy in parallel
-#    - API Gateway deploys last (depends on all services)
-# 5. To deploy: Push this file to your repo, Render auto-detects it
+#    - Then all 6 services deploy in parallel
+# 5. Frontend must call each service directly:
+#    - Auth: https://auth-service.onrender.com/api/v1/*
+#    - User: https://user-service.onrender.com/api/v1/*
+#    - Event: https://event-service.onrender.com/api/v1/*
+#    - Transaction: https://transaction-service.onrender.com/api/v1/*
+#    - Admin: https://admin-service.onrender.com/api/v1/*
+#    - Upload: https://upload-service.onrender.com/api/v1/*
+# 6. Total cost: $42/month (6 services × $7) + $7/month database = $49/month
+# 7. To deploy: Push this file to your repo, Render auto-detects it
 

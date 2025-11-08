@@ -3,15 +3,15 @@ import type { NextFunction, Response } from "express";
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
-} from "../types/express.js";
+} from "../types/express";
 import jwt, { JwtPayload as JwtPayloadOriginal } from "jsonwebtoken";
 import { z } from "zod";
 import crypto from "crypto";
-import prisma from "../config/prisma.js";
-import { logger } from "../utils/appSetup.js";
-import { ResponseBuilder } from "../utils/responseHandler.js";
-import { getCache, setCache } from "../utils/cache.js";
-import { ERROR_CODES } from "../constants/errorCodes.js";
+import prisma from "../config/prisma";
+import { logger } from "../utils/appSetup";
+import { ResponseBuilder } from "../utils/responseHandler";
+import { getCache, setCache } from "../utils/cache";
+import { ERROR_CODES } from "../constants/errorCodes";
 
 // Environment variable validation
 const authEnvSchema = z.object({

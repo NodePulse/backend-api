@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from "express";
-import { encryptResponse } from "../utils/encryption.js";
+import { encryptResponse } from "../utils/encryption";
 
 /**
  * Middleware to encrypt response data before sending

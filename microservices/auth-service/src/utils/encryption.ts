@@ -1,5 +1,5 @@
 import CryptoJS from "crypto-js";
-import { env } from "../../shared/config/env.js";
+import { env } from "../../shared/config/env";
 
 /**
  * Encrypts data using AES encryption (CryptoJS format)
