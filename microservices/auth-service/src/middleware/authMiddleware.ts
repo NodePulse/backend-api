@@ -7,7 +7,7 @@ import type {
 import jwt, { JwtPayload as JwtPayloadOriginal } from "jsonwebtoken";
 import { z } from "zod";
 import crypto from "crypto";
-import prisma from "../../shared/config/prisma";
+import prisma from "../config/prisma";
 import { createLogger, format, transports } from "winston";
 import { ResponseBuilder } from "../../shared/utils/responseHandler";
 import { getCache, setCache } from "../../shared/utils/cache";

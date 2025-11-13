@@ -37,12 +37,12 @@ fi
 
 # Array of services with their ports
 declare -a SERVICES=(
-  "auth-service:3001"
-  "user-service:3002"
-  "event-service:3003"
-  "transaction-service:3004"
-  "admin-service:3005"
-  "upload-service:3006"
+  "auth-service:8001"
+  "user-service:8002"
+  "event-service:8003"
+  "transaction-service:8004"
+  "admin-service:8005"
+  "upload-service:8006"
 )
 
 # Install dependencies for all services first

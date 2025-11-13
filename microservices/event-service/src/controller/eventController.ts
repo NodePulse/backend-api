@@ -1,37 +1,246 @@
-import type { Request, Response } from "express";
-import prisma from "../../shared/config/prisma.js";
+import type { Response } from "express";
+import type { AuthenticatedRequest } from "../../shared/types/express";
+import { createLogger, format, transports } from "winston";
+import { z } from "zod";
+import prisma from "../config/prisma";
 import { uploadFileToR2 } from "../../shared/utils/uploadUtils.js";
 import { validationResult } from "express-validator";
 import { Prisma } from "@prisma/client";
 import { generateTransactionId } from "../../shared/utils/commonFunction.js";
 import { razorpay } from "../../shared/config/razorpay.js";
+import { ResponseBuilder } from "../../shared/utils/responseHandler";
+import { env } from "../../shared/config/env";
+import { ERROR_CODES } from "../../shared/constants/errorCodes";
+
+// Structured logger
+const logger = createLogger({
+  level: "info",
+  format: format.combine(format.timestamp(), format.json()),
+  transports: [new transports.Console()],
+});
+
+// Validation schema for creating events
+const CreateEventSchema = z
+  .object({
+    title: z
+      .string()
+      .min(5, { message: "Title must be at least 5 characters" })
+      .max(100, { message: "Title cannot exceed 100 characters" })
+      .regex(/^[a-zA-Z0-9\s\-_:!&(),.'"]+$/, {
+        message: "Title contains invalid characters",
+      }),
+    description: z
+      .string()
+      .min(20, { message: "Description must be at least 20 characters" })
+      .max(500, { message: "Description cannot exceed 500 characters" }),
+    body: z
+      .string()
+      .min(50, { message: "Event details must be at least 50 characters" }),
+    location: z
+      .string()
+      .min(3, { message: "Location must be at least 3 characters" })
+      .max(200, { message: "Location cannot exceed 200 characters" }),
+    startDate: z.string().datetime({ message: "Invalid start date format" }),
+    endDate: z.string().datetime({ message: "Invalid end date format" }),
+    startTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+        message: "Invalid time format (HH:MM)",
+      }),
+    endTime: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+        message: "Invalid time format (HH:MM)",
+      }),
+    price: z
+      .string()
+      .transform((val) => parseFloat(val))
+      .pipe(z.number().min(0, { message: "Price must be a positive number" })),
+    currency: z.enum(
+      ["USD", "EUR", "INR", "GBP", "AUD", "CAD", "JPY", "CNY", "CHF", "SGD"],
+      {
+        message: "Invalid currency code",
+      }
+    ),
+    category: z.enum(
+      [
+        "Music",
+        "Sports",
+        "Technology",
+        "Art",
+        "Fashion",
+        "Food",
+        "Travel",
+        "Health",
+        "Education",
+        "Business",
+        "Photography",
+        "Cultural",
+        "Gaming",
+        "Entertainment",
+        "Environment",
+        "Networking",
+      ],
+      {
+        message: "Invalid category",
+      }
+    ),
+    eventType: z.enum(["offline", "online", "hybrid"], {
+      message: "Event type must be offline, online, or hybrid",
+    }),
+    maxAttendees: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : undefined))
+      .pipe(
+        z
+          .number()
+          .int()
+          .min(1, { message: "At least 1 attendee required" })
+          .max(50, { message: "Maximum 50 attendees allowed" })
+          .optional()
+      ),
+    tags: z
+      .string()
+      .max(200, { message: "Tags cannot exceed 200 characters" })
+      .regex(/^[a-zA-Z0-9,\s-]*$/, {
+        message: "Tags can only contain letters, numbers, commas, spaces, and hyphens",
+      })
+      .optional(),
+    eventUrl: z
+      .string()
+      .url({ message: "Must be a valid URL (e.g., https://example.com)" })
+      .max(500, { message: "URL is too long" })
+      .optional(),
+    contactEmail: z
+      .string()
+      .email({ message: "Invalid email address" })
+      .max(100, { message: "Email is too long" })
+      .optional(),
+    contactPhone: z
+      .string()
+      .min(10, { message: "Phone number must be at least 10 digits" })
+      .max(20, { message: "Phone number is too long" })
+      .regex(/^[0-9+\-() ]+$/, { message: "Invalid phone number format" })
+      .optional(),
+    requirements: z
+      .string()
+      .max(500, { message: "Requirements cannot exceed 500 characters" })
+      .optional(),
+    refundPolicy: z
+      .string()
+      .max(500, { message: "Refund policy cannot exceed 500 characters" })
+      .optional(),
+    ageRestriction: z
+      .string()
+      .optional()
+      .transform((val) => (val ? parseInt(val, 10) : undefined))
+      .pipe(
+        z
+          .number()
+          .int()
+          .min(0, { message: "Age must be 0 or greater" })
+          .max(99, { message: "Invalid age" })
+          .optional()
+      ),
+    registrationDeadline: z
+      .string()
+      .datetime({ message: "Invalid deadline date format" })
+      .optional(),
+    allowWaitlist: z
+      .string()
+      .optional()
+      .transform((val) => val === "true"),
+    sendReminders: z
+      .string()
+      .optional()
+      .transform((val) => val !== "false"),
+    allowGuestRegistration: z
+      .string()
+      .optional()
+      .transform((val) => val === "true"),
+    isPublished: z
+      .string()
+      .optional()
+      .transform((val) => val !== "false"),
+  })
+  .refine(
+    (data) => {
+      const startDate = new Date(data.startDate);
+      const now = new Date();
+      return startDate > now;
+    },
+    {
+      message: "Event cannot be in the past",
+      path: ["startDate"],
+    }
+  )
+  .refine(
+    (data) => {
+      const startDate = new Date(data.startDate);
+      const endDate = new Date(data.endDate);
+      return endDate > startDate;
+    },
+    {
+      message: "End date must be after start date",
+      path: ["endDate"],
+    }
+  )
+  .refine(
+    (data) => {
+      if (!data.registrationDeadline) return true;
+      const deadline = new Date(data.registrationDeadline);
+      const startDate = new Date(data.startDate);
+      const now = new Date();
+      return deadline > now && deadline < startDate;
+    },
+    {
+      message: "Deadline cannot be in the past and must be before event starts",
+      path: ["registrationDeadline"],
+    }
+  );
 
 /**
  * @desc    Create a new event
- * @route   POST /api/events
+ * @route   POST /api/v1/events/create
  * @access  Private (requires user to be logged in)
  */
-export const createEvent = async (req: Request, res: Response) => {
-  // 1. Get the authenticated user's ID from the request object (set by your auth middleware)
-  const organizerId = (req as any).user?.id;
-  if (!organizerId) {
-    // This case should ideally be handled by the auth middleware itself
-    return res.status(401).json({ error: "User not authenticated." });
-  }
-  // console.log(req.files)
+export const createEvent = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
+  const user = req.user;
 
-  // 2. Get the event details from the request body
-  const {
-    title,
-    description,
-    body,
-    startDate,
-    endDate,
-    location,
-    category,
-    price,
-    currency,
-  } = req.body;
+  if (!user) {
+    logger.warn("Create event attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  // Validate input using Zod schema
+  const result = CreateEventSchema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map((issue: z.ZodIssue) => ({
+      field: issue.path.join("."),
+      issue: issue.message,
+    }));
+    logger.warn("Invalid event creation input", { requestId, errors, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors)
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  const validatedData = result.data;
+
+  // Validate file uploads
   const files = req.files;
   let imageUrl: string | undefined;
   let videoUrl: string | undefined;
@@ -44,96 +253,199 @@ export const createEvent = async (req: Request, res: Response) => {
       "video"
     ]?.[0];
 
+    // Validate image file
     if (imageFile) {
+      const maxImageSize = 10 * 1024 * 1024; // 10 MB
+      if (imageFile.size > maxImageSize) {
+        logger.warn("Image file too large", { requestId, size: imageFile.size });
+        return new ResponseBuilder(res)
+          .status(400)
+          .message("File size must be less than 10MB")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
+      }
+
+      const allowedImageFormats = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+      const fileExt = imageFile.originalname
+        .toLowerCase()
+        .substring(imageFile.originalname.lastIndexOf("."));
+      if (!allowedImageFormats.includes(fileExt)) {
+        logger.warn("Invalid image format", { requestId, format: fileExt });
+        return new ResponseBuilder(res)
+          .status(400)
+          .message("Image must be PNG, JPG, GIF, or WebP format")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
+      }
+
       imageUrl = await uploadFileToR2(imageFile, "events");
-      console.log("Image URL:", imageUrl);
+      logger.info("Image uploaded", { requestId, imageUrl });
     }
 
+    // Validate video file
     if (videoFile) {
-      videoUrl = await uploadFileToR2(videoFile, "events");
-      console.log("Video File:", videoUrl);
-    }
-  }
+      const maxVideoSize = 50 * 1024 * 1024; // 50 MB
+      if (videoFile.size > maxVideoSize) {
+        logger.warn("Video file too large", { requestId, size: videoFile.size });
+        return new ResponseBuilder(res)
+          .status(400)
+          .message("File size must be less than 50MB")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
+      }
 
-  // 3. Validate the required input fields
-  if (
-    !title ||
-    !description ||
-    !body ||
-    !startDate ||
-    !endDate ||
-    !location ||
-    !category ||
-    !price ||
-    !currency
-  ) {
-    return res.status(400).json({
-      error:
-        "Title, description, body, date, and location are required fields.",
-    });
+      const allowedVideoFormats = [".mp4", ".mov", ".avi", ".webm"];
+      const fileExt = videoFile.originalname
+        .toLowerCase()
+        .substring(videoFile.originalname.lastIndexOf("."));
+      if (!allowedVideoFormats.includes(fileExt)) {
+        logger.warn("Invalid video format", { requestId, format: fileExt });
+        return new ResponseBuilder(res)
+          .status(400)
+          .message("Video must be MP4, MOV, AVI, or WebM format")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
+      }
+
+      videoUrl = await uploadFileToR2(videoFile, "events");
+      logger.info("Video uploaded", { requestId, videoUrl });
+    }
   }
 
   try {
-    // 4. Create the new event in the database and link it to the organizer
+    // Map eventType from lowercase to uppercase enum
+    const eventTypeMap: Record<string, "OFFLINE" | "ONLINE" | "HYBRID"> = {
+      offline: "OFFLINE",
+      online: "ONLINE",
+      hybrid: "HYBRID",
+    };
+
     const newEvent = await prisma.event.create({
       data: {
-        title,
-        description,
-        body,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        location,
-        category,
-        price,
-        currency,
+        title: validatedData.title,
+        description: validatedData.description,
+        body: validatedData.body,
+        location: validatedData.location,
+        startDate: new Date(validatedData.startDate),
+        endDate: new Date(validatedData.endDate),
+        startTime: validatedData.startTime,
+        endTime: validatedData.endTime,
+        price: validatedData.price as number,
+        currency: validatedData.currency,
+        category: validatedData.category,
+        eventType: eventTypeMap[validatedData.eventType],
         imageUrl: imageUrl,
-        videoUrl: videoUrl, // This is optional as defined in our schema
-        organizerId: organizerId,
+        videoUrl: videoUrl,
+        organizerId: user.id,
+        maxAttendees: validatedData.maxAttendees,
+        tags: validatedData.tags,
+        eventUrl: validatedData.eventUrl,
+        contactEmail: validatedData.contactEmail,
+        contactPhone: validatedData.contactPhone,
+        requirements: validatedData.requirements,
+        refundPolicy: validatedData.refundPolicy,
+        ageRestriction: validatedData.ageRestriction,
+        registrationDeadline: validatedData.registrationDeadline
+          ? new Date(validatedData.registrationDeadline)
+          : null,
+        allowWaitlist: validatedData.allowWaitlist || false,
+        sendReminders: validatedData.sendReminders !== false,
+        allowGuestRegistration: validatedData.allowGuestRegistration || false,
+        isPublished: validatedData.isPublished !== false,
       },
-      // Select the fields you want to return to the client
       select: {
         id: true,
         title: true,
+        description: true,
         body: true,
+        location: true,
         startDate: true,
         endDate: true,
-        location: true,
-        category: true,
+        startTime: true,
+        endTime: true,
         price: true,
         currency: true,
+        category: true,
+        eventType: true,
         imageUrl: true,
         videoUrl: true,
+        maxAttendees: true,
+        tags: true,
+        eventUrl: true,
+        contactEmail: true,
+        contactPhone: true,
+        requirements: true,
+        refundPolicy: true,
+        ageRestriction: true,
+        registrationDeadline: true,
+        allowWaitlist: true,
+        sendReminders: true,
+        allowGuestRegistration: true,
+        isPublished: true,
+        createdAt: true,
+        updatedAt: true,
         organizer: {
           select: {
             id: true,
             name: true,
+            email: true,
+            image: true,
           },
         },
       },
     });
 
-    // // 5. Send a success response with the newly created event data
-    return res
+    logger.info("Event created successfully", {
+      requestId,
+      eventId: newEvent.id,
+      userId: user.id,
+    });
+    return new ResponseBuilder(res)
       .status(201)
-      .json({ message: "Event created successfully", newEvent });
+      .message("Event created successfully")
+      .withData(newEvent)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    // Handle potential errors, e.g., database connection issues
-    console.error("Error creating event:", error);
-    return res.status(500).json({ error: "Failed to create event." });
+    logger.error("Error creating event", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to create event. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const getMyEvents = async (req: Request, res: Response) => {
-  const organizerId = (req as any).user?.id;
+export const getMyEvents = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
+  const user = req.user;
 
-  if (!organizerId) {
-    res.status(401).json({ error: "User not authenticated." });
-    return;
+  if (!user) {
+    logger.warn("Get my events attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   try {
     const events = await prisma.event.findMany({
-      where: { organizerId },
+      where: { organizerId: user.id },
       select: {
         id: true,
         title: true,
@@ -156,14 +468,30 @@ export const getMyEvents = async (req: Request, res: Response) => {
       },
     });
 
-    return res.status(200).json(events);
+    logger.info("My events fetched successfully", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Events retrieved successfully")
+      .withData(events)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.error("Error fetching events:", error);
-    return res.status(500).json({ error: "Failed to fetch events." });
+    logger.error("Error fetching my events", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to fetch events. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const getAllEvents = async (req: Request, res: Response) => {
+export const getAllEvents = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
+
   try {
     const { page = "1", limit = "10", search, status } = req.query;
 
@@ -174,18 +502,12 @@ export const getAllEvents = async (req: Request, res: Response) => {
     const now = new Date();
     const andConditions: Prisma.EventWhereInput[] = [];
 
-    // Search filter
     if (search) {
       andConditions.push({
-        // OR: [
-        //   { title: { contains: search as string, mode: "insensitive" } },
-        //   { description: { contains: search as string, mode: "insensitive" } },
-        // ],
         title: { contains: search as string, mode: "insensitive" },
       });
     }
 
-    // Status filter
     if (status) {
       if (status === "upcoming") {
         andConditions.push({ startDate: { gt: now } });
@@ -196,7 +518,6 @@ export const getAllEvents = async (req: Request, res: Response) => {
       }
     }
 
-    // ✅ No user filter here → returns all users’ events
     const whereClause: Prisma.EventWhereInput =
       andConditions.length > 0 ? { AND: andConditions } : {};
 
@@ -208,152 +529,243 @@ export const getAllEvents = async (req: Request, res: Response) => {
         orderBy: { startDate: "asc" },
         include: {
           organizer: {
-            select: { id: true, name: true, email: true }, // show who created it
+            select: { id: true, name: true, email: true },
           },
         },
       }),
       prisma.event.count({ where: whereClause }),
     ]);
 
-    return res.status(200).json({
-      success: true,
-      data: events,
-      pagination: {
-        totalItems,
-        totalPages: Math.ceil(totalItems / limitNum),
-        currentPage: pageNum,
-        pageSize: limitNum,
-      },
-    });
+    logger.info("All events fetched successfully", { requestId });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Events retrieved successfully")
+      .withData({
+        events,
+        pagination: {
+          totalItems,
+          totalPages: Math.ceil(totalItems / limitNum),
+          currentPage: pageNum,
+          pageSize: limitNum,
+        },
+      })
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.error("❌ Failed to fetch events:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    logger.error("Failed to fetch all events", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to fetch events. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const getEventById = async (req: Request, res: Response) => {
-  // 1. Validate the incoming request parameter
+export const getEventById = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
   const errors = validationResult(req);
+
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    logger.warn("Invalid event ID validation", { requestId, errors: errors.array() });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors.array().map(err => ({
+        field: err.type === 'field' ? err.path : 'unknown',
+        issue: err.msg,
+      })))
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
-  // 2. Extract the ID from the URL
   const { id } = req.params;
 
   try {
-    // 3. Find the event using its unique ID
     const event = await prisma.event.findUnique({
       where: {
         id: id,
       },
-      // Optionally, include related data if you have relations
       include: {
         organizer: true,
-        // category: true,
       },
     });
 
-    // 4. Handle the case where the event is not found
     if (!event) {
-      return res.status(404).json({ message: "Event not found." });
+      logger.warn("Event not found", { requestId, eventId: id });
+      return new ResponseBuilder(res)
+        .status(404)
+        .message("Event not found")
+        .withErrorCode(ERROR_CODES.USER_NOT_FOUND)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
-    // 5. Send the successful response
-    return res.status(200).json(event);
+    logger.info("Event fetched successfully", { requestId, eventId: id });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Event retrieved successfully")
+      .withData(event)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.error("Failed to fetch event:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    logger.error("Failed to fetch event", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to fetch event. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const checkEventRegistration = async (req: Request, res: Response) => {
+export const checkEventRegistration = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
   const eventId = req.params.id;
-  const userId = (req as any).user?.id; // Assumes user ID is attached by auth middleware
+  const user = req.user;
 
-  if (!userId) {
-    return res.status(401).json({ error: "User not authenticated." });
+  if (!user) {
+    logger.warn("Check event registration attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   if (!eventId) {
-    return res.status(400).json({ error: "Event ID is required." });
+    logger.warn("Missing event ID", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Event ID is required")
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   try {
-    // 1. Fetch the event to check who the organizer is
     const event = await prisma.event.findUnique({
       where: { id: eventId },
     });
 
     if (!event) {
-      return res.status(404).json({ message: "Event not found." });
+      logger.warn("Event not found for registration check", { requestId, eventId });
+      return new ResponseBuilder(res)
+        .status(404)
+        .message("Event not found")
+        .withErrorCode(ERROR_CODES.USER_NOT_FOUND)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
-    // 2. Check if the current user is the organizer
-    if (event.organizerId === userId) {
-      return res.status(200).json({
-        registered: true,
-        isOrganizer: true,
-        message: "You are the organizer of this event.",
-      });
+    if (event.organizerId === user.id) {
+      logger.info("User is event organizer", { requestId, userId: user.id, eventId });
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("You are the organizer of this event")
+        .withData({
+          registered: true,
+          isOrganizer: true,
+        })
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
 
-    // 3. If not the organizer, check the Attendee table like before
     const existingRegistration = await prisma.attendee.findFirst({
       where: {
         eventId: eventId,
-        userId: userId,
+        userId: user.id,
       },
     });
 
     if (existingRegistration) {
-      return res.status(200).json({
-        registered: true,
-        isOrganizer: false,
-        message: "You are registered for this event.",
-      });
+      logger.info("User is registered for event", { requestId, userId: user.id, eventId });
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("You are registered for this event")
+        .withData({
+          registered: true,
+          isOrganizer: false,
+        })
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     } else {
-      return res.status(200).json({
-        registered: false,
-        isOrganizer: false,
-        message: "You are not registered for this event.",
-      });
+      logger.info("User is not registered for event", { requestId, userId: user.id, eventId });
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("You are not registered for this event")
+        .withData({
+          registered: false,
+          isOrganizer: false,
+        })
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
   } catch (error) {
-    console.error("Error checking event registration:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    logger.error("Error checking event registration", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to check event registration. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-// ... (imports)
-
-export const getEventAttendees = async (req: Request, res: Response) => {
-  // 1. Validate incoming request
+export const getEventAttendees = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
   const errors = validationResult(req);
+
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    logger.warn("Invalid attendees request validation", { requestId, errors: errors.array() });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Invalid input provided")
+      .withValidationErrors(errors.array().map(err => ({
+        field: err.type === 'field' ? err.path : 'unknown',
+        issue: err.msg,
+      })))
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 
   const { id: eventId } = req.params;
-  const userId = (req as any).user?.id;
+  const user = req.user;
   const { page = "1", limit = "20" } = req.query;
-  console.log(eventId);
 
   const pageNum = parseInt(page as string, 10);
   const limitNum = parseInt(limit as string, 10);
   const offset = (pageNum - 1) * limitNum;
 
   try {
-    // 2. Fetch the attendees for the event with pagination
     const attendees = await prisma.attendee.findMany({
       where: { eventId },
       take: limitNum,
       skip: offset,
       orderBy: {
-        registeredAt: "desc", // Added for consistent ordering
+        registeredAt: "desc",
       },
       include: {
-        // 3. Include the user's public information
         user: {
           select: {
             id: true,
@@ -364,7 +776,6 @@ export const getEventAttendees = async (req: Request, res: Response) => {
       },
     });
 
-    // 4. Get the total count for pagination metadata
     const totalAttendees = await prisma.attendee.count({
       where: { eventId },
     });
@@ -384,61 +795,112 @@ export const getEventAttendees = async (req: Request, res: Response) => {
       },
     });
 
-    // 5. Send the structured response
-    return res.status(200).json({
-      // --- FIX APPLIED HERE ---
-      data: attendees
-        .filter((attendee) => attendee.userId !== userId)
-        .map((attendee) => attendee.user),
-      me: attendees.find((attendee) => attendee.userId === userId)?.user,
-      organizer,
-      pagination: {
-        totalItems: totalAttendees,
-        totalPages,
-        currentPage: pageNum,
-        pageSize: limitNum,
-      },
-    });
+    logger.info("Event attendees fetched successfully", { requestId, eventId });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("Event attendees retrieved successfully")
+      .withData({
+        data: attendees
+          .filter((attendee) => attendee.userId !== user?.id)
+          .map((attendee) => attendee.user),
+        me: attendees.find((attendee) => attendee.userId === user?.id)?.user,
+        organizer,
+        pagination: {
+          totalItems: totalAttendees,
+          totalPages,
+          currentPage: pageNum,
+          pageSize: limitNum,
+        },
+      })
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   } catch (error) {
-    console.error("Failed to fetch event attendees:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    logger.error("Failed to fetch event attendees", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to fetch event attendees. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };
 
-export const eventRegister = async (req: Request, res: Response) => {
+export const eventRegister = async (req: AuthenticatedRequest, res: Response) => {
+  const requestId = crypto.randomUUID();
   const eventId = req.params.id;
-  const userId = (req as any).user?.id;
+  const user = req.user;
   const { amount, currency, paymentMethod, cardNumber, upiId } = req.body;
 
   const last4 = cardNumber ? cardNumber.slice(-4) : null;
 
-  if (!userId)
-    return res.status(401).json({ error: "User not authenticated." });
-  if (!eventId) return res.status(400).json({ error: "Event ID is required." });
+  if (!user) {
+    logger.warn("Event registration attempted without authentication", { requestId });
+    return new ResponseBuilder(res)
+      .status(401)
+      .message("User not authenticated")
+      .withErrorCode(ERROR_CODES.NOT_AUTHENTICATED)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
+
+  if (!eventId) {
+    logger.warn("Missing event ID for registration", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(400)
+      .message("Event ID is required")
+      .withErrorCode(ERROR_CODES.INVALID_INPUT)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
 
   try {
-    // 1. Find the event and check for existing registration
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      include: { attendees: { where: { userId } } },
+      include: { attendees: { where: { userId: user.id } } },
     });
 
-    if (!event) return res.status(404).json({ error: "Event not found." });
-    if (event.attendees.length > 0)
-      return res.status(409).json({ error: "Already registered." });
+    if (!event) {
+      logger.warn("Event not found for registration", { requestId, eventId });
+      return new ResponseBuilder(res)
+        .status(404)
+        .message("Event not found")
+        .withErrorCode(ERROR_CODES.USER_NOT_FOUND)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
+    }
+
+    if (event.attendees.length > 0) {
+      logger.warn("User already registered for event", { requestId, userId: user.id, eventId });
+      return new ResponseBuilder(res)
+        .status(409)
+        .message("Already registered for this event")
+        .withErrorCode(ERROR_CODES.USER_EXISTS)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
+    }
 
     const isFreeEvent = !event.price || Number(event.price) <= 0;
 
     if (isFreeEvent) {
-      console.log(amount, currency);
-      // FREE event: register directly
       if (Number(amount) !== 0 || !currency) {
-        return res
+        logger.warn("Invalid payment details for free event", { requestId, userId: user.id, eventId });
+        return new ResponseBuilder(res)
           .status(400)
-          .json({ error: "Payment details are required for free events." });
+          .message("Invalid payment details for free event")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
       }
 
-      const transactionId = generateTransactionId(eventId, userId);
+      const transactionId = generateTransactionId(eventId, user.id);
 
       const payment = await prisma.payment.create({
         data: {
@@ -447,43 +909,58 @@ export const eventRegister = async (req: Request, res: Response) => {
           status: "COMPLETED",
           transactionId,
           paymentGateway: "mock",
-          userId,
+          userId: user.id,
           eventId,
           cardLast4: last4,
-          method: "free", // "card" or "upi" etc.
-          metadata: paymentMethod === "free" ? { userId: userId } : {},
+          method: "free",
+          metadata: paymentMethod === "free" ? { userId: user.id } : {},
         },
       });
 
       await prisma.$transaction(async (tx) => {
-        await tx.attendee.create({ data: { userId, eventId } });
+        await tx.attendee.create({ data: { userId: user.id, eventId } });
       });
 
-      return res.status(200).json({
-        message: "Registration successful.",
-        paymentId: payment.id,
-      });
+      logger.info("Free event registration successful", { requestId, userId: user.id, eventId, paymentId: payment.id });
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("Registration successful")
+        .withData({
+          paymentId: payment.id,
+        })
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     } else {
-      // PAID event: payment required
       if (!amount || !currency || !paymentMethod) {
-        return res
+        logger.warn("Missing payment details for paid event", { requestId, userId: user.id, eventId });
+        return new ResponseBuilder(res)
           .status(400)
-          .json({ error: "Payment details are required for paid events." });
+          .message("Payment details are required for paid events")
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
       }
 
-      // Ensure the amount from the request matches the event price
       if (Number(amount) !== Number(event.price)) {
-        return res.status(400).json({
-          error: `The provided amount (${amount}) does not match the event price (${event.price}).`,
-        });
+        logger.warn("Amount mismatch", { requestId, userId: user.id, eventId, provided: amount, expected: event.price });
+        return new ResponseBuilder(res)
+          .status(400)
+          .message(`The provided amount (${amount}) does not match the event price (${event.price})`)
+          .withErrorCode(ERROR_CODES.INVALID_INPUT)
+          .withRequestId(requestId)
+          .withLogging(env.NODE_ENV !== "production")
+          .send();
       }
+
       const orderOptions = {
         amount: amount * 100,
         currency,
-        receipt: `rcpt_${Date.now()}`, // FIX: Shortened receipt to be under 40 chars
+        receipt: `rcpt_${Date.now()}`,
         notes: {
           eventId,
-          userId,
+          userId: user.id,
         },
       };
 
@@ -496,10 +973,10 @@ export const eventRegister = async (req: Request, res: Response) => {
           status: "PENDING",
           transactionId: order.id,
           paymentGateway: "razorpay",
-          userId,
+          userId: user.id,
           eventId,
           cardLast4: last4,
-          method: paymentMethod, // "card" or "upi" etc.
+          method: paymentMethod,
           metadata:
             paymentMethod === "upi"
               ? { upiId }
@@ -509,14 +986,27 @@ export const eventRegister = async (req: Request, res: Response) => {
         },
       });
 
-      return res.status(200).json({
-        message: "Order created successfully. Proceed with payment.",
-        paymentId: payment.id,
-        order,
-      });
+      logger.info("Payment order created successfully", { requestId, userId: user.id, eventId, paymentId: payment.id });
+      return new ResponseBuilder(res)
+        .status(200)
+        .message("Order created successfully. Proceed with payment")
+        .withData({
+          paymentId: payment.id,
+          order,
+        })
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
     }
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    logger.error("Event registration error", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Event registration failed. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
   }
 };

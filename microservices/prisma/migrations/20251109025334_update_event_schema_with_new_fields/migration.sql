@@ -1,0 +1,42 @@
+-- CreateEnum
+DO $$ BEGIN
+ CREATE TYPE "EventType" AS ENUM('OFFLINE', 'ONLINE', 'HYBRID');
+EXCEPTION
+ WHEN duplicate_object THEN null;
+END $$;
+
+-- AlterTable: Add new columns with defaults for existing rows
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "startTime" TEXT NOT NULL DEFAULT '09:00';
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "endTime" TEXT NOT NULL DEFAULT '17:00';
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "eventType" "EventType" NOT NULL DEFAULT 'OFFLINE';
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "maxAttendees" INTEGER;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "tags" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "eventUrl" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "contactEmail" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "contactPhone" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "requirements" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "refundPolicy" TEXT;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "ageRestriction" INTEGER;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "registrationDeadline" TIMESTAMP(3);
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "allowWaitlist" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "sendReminders" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "allowGuestRegistration" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "isPublished" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+ALTER TABLE "Event" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+-- AlterTable: Change price from TEXT to DOUBLE PRECISION
+-- First, drop the existing default
+ALTER TABLE "Event" ALTER COLUMN "price" DROP DEFAULT;
+
+-- Update existing rows to convert text to numeric
+UPDATE "Event" SET "price" = '0' WHERE "price" IS NULL OR "price" = '';
+
+-- Change the column type
+ALTER TABLE "Event" ALTER COLUMN "price" TYPE DOUBLE PRECISION USING CASE 
+  WHEN "price" ~ '^[0-9]+\.?[0-9]*$' THEN "price"::double precision 
+  ELSE 0 
+END;
+
+-- Set the new default
+ALTER TABLE "Event" ALTER COLUMN "price" SET DEFAULT 0;

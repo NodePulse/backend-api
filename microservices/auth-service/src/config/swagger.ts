@@ -19,7 +19,7 @@ Most endpoints require authentication via JWT token stored in an HTTP-only cooki
 The token is automatically set when you register or login, and is valid for 24 hours.
 
 ## Base URL
-- **Development**: http://localhost:3001
+- **Development**: http://localhost:8001
 - **Production**: (Configure in environment)
 
 ## Response Format
@@ -145,6 +145,96 @@ For issues or questions, please contact the development team.
             example: "USER",
             default: "USER",
           },
+          phone: {
+            type: "string",
+            nullable: true,
+            description: "User's phone number",
+            example: "+1234567890",
+          },
+          bio: {
+            type: "string",
+            nullable: true,
+            description: "User's bio (max 500 characters)",
+            example: "Passionate developer and event enthusiast",
+          },
+          dateOfBirth: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+            description: "User's date of birth",
+            example: "1990-01-15T00:00:00.000Z",
+          },
+          city: {
+            type: "string",
+            nullable: true,
+            description: "User's city",
+            example: "New York",
+          },
+          country: {
+            type: "string",
+            nullable: true,
+            description: "User's country",
+            example: "United States",
+          },
+          company: {
+            type: "string",
+            nullable: true,
+            description: "User's company/organization",
+            example: "Tech Corp",
+          },
+          jobTitle: {
+            type: "string",
+            nullable: true,
+            description: "User's job title",
+            example: "Software Engineer",
+          },
+          website: {
+            type: "string",
+            format: "uri",
+            nullable: true,
+            description: "User's personal website",
+            example: "https://johndoe.com",
+          },
+          linkedinUrl: {
+            type: "string",
+            format: "uri",
+            nullable: true,
+            description: "User's LinkedIn profile URL",
+            example: "https://linkedin.com/in/johndoe",
+          },
+          twitterUrl: {
+            type: "string",
+            format: "uri",
+            nullable: true,
+            description: "User's Twitter/X profile URL",
+            example: "https://twitter.com/johndoe",
+          },
+          instagramUrl: {
+            type: "string",
+            format: "uri",
+            nullable: true,
+            description: "User's Instagram profile URL",
+            example: "https://instagram.com/johndoe",
+          },
+          isActive: {
+            type: "boolean",
+            description: "Account active status",
+            example: true,
+            default: true,
+          },
+          lastLoginAt: {
+            type: "string",
+            format: "date-time",
+            nullable: true,
+            description: "Last login timestamp",
+            example: "2024-01-01T00:00:00.000Z",
+          },
+          notificationsEnabled: {
+            type: "boolean",
+            description: "Email notifications enabled",
+            example: true,
+            default: true,
+          },
           createdAt: {
             type: "string",
             format: "date-time",
@@ -158,7 +248,7 @@ For issues or questions, please contact the development team.
             example: "2024-01-01T00:00:00.000Z",
           },
         },
-        required: ["id", "email", "username", "gender", "role", "createdAt", "updatedAt"],
+        required: ["id", "email", "username", "role", "createdAt", "updatedAt"],
       },
       // Register Request
       RegisterRequest: {
@@ -748,9 +838,24 @@ Register a new user account. Upon successful registration:
                     id: "123e4567-e89b-12d3-a456-426614174000",
                     email: "john.doe@example.com",
                     username: "johndoe",
+                    name: null,
                     gender: "Male",
                     role: "USER",
                     image: "https://api.dicebear.com/7.x/avataaars/svg?seed=johndoe",
+                    phone: null,
+                    bio: null,
+                    dateOfBirth: null,
+                    city: null,
+                    country: null,
+                    company: null,
+                    jobTitle: null,
+                    website: null,
+                    linkedinUrl: null,
+                    twitterUrl: null,
+                    instagramUrl: null,
+                    isActive: true,
+                    lastLoginAt: null,
+                    notificationsEnabled: true,
                     createdAt: "2024-01-01T00:00:00.000Z",
                     updatedAt: "2024-01-01T00:00:00.000Z",
                     token:
@@ -851,6 +956,20 @@ Authenticate a user with email and password. Upon successful login:
                     gender: "Male",
                     image: "https://api.dicebear.com/7.x/avataaars/svg?seed=johndoe",
                     role: "USER",
+                    phone: "+1234567890",
+                    bio: "Passionate developer and event enthusiast",
+                    dateOfBirth: "1990-01-15T00:00:00.000Z",
+                    city: "New York",
+                    country: "United States",
+                    company: "Tech Corp",
+                    jobTitle: "Software Engineer",
+                    website: "https://johndoe.com",
+                    linkedinUrl: "https://linkedin.com/in/johndoe",
+                    twitterUrl: "https://twitter.com/johndoe",
+                    instagramUrl: "https://instagram.com/johndoe",
+                    isActive: true,
+                    lastLoginAt: "2023-12-31T23:59:59.000Z",
+                    notificationsEnabled: true,
                     createdAt: "2024-01-01T00:00:00.000Z",
                     updatedAt: "2024-01-01T00:00:00.000Z",
                     token:
@@ -967,13 +1086,16 @@ For enhanced security, consider implementing token blacklisting.
         tags: ["User Profile"],
         summary: "Get authenticated user profile",
         description: `
-Retrieve the profile information of the currently authenticated user.
+Retrieve the complete profile information of the currently authenticated user.
 This endpoint requires a valid JWT token in the cookie.
 
 **Returns:**
-- User ID, email, username
-- Name, gender, profile image
-- Role and account timestamps
+- **Basic Info**: ID, email, username, name, gender, image, role
+- **Contact & Personal**: phone, bio, dateOfBirth, city, country
+- **Professional**: company, jobTitle, website
+- **Social Links**: linkedinUrl, twitterUrl, instagramUrl
+- **Account Settings**: isActive, lastLoginAt, notificationsEnabled
+- **Timestamps**: createdAt, updatedAt
         `,
         operationId: "getMe",
         security: [{ cookieAuth: [] }],
@@ -991,7 +1113,7 @@ This endpoint requires a valid JWT token in the cookie.
                     code: 200,
                     description: "OK",
                   },
-                  message: "User details fetched successfully",
+                  message: "User profile retrieved successfully",
                   timestamp: "2024-01-01T00:00:00.000Z",
                   responseTimeMs: 25,
                   requestId: "123e4567-e89b-12d3-a456-426614174000",
@@ -1004,6 +1126,20 @@ This endpoint requires a valid JWT token in the cookie.
                     gender: "Male",
                     image: "https://api.dicebear.com/7.x/avataaars/svg?seed=johndoe",
                     role: "USER",
+                    phone: "+1234567890",
+                    bio: "Passionate developer and event enthusiast",
+                    dateOfBirth: "1990-01-15T00:00:00.000Z",
+                    city: "New York",
+                    country: "United States",
+                    company: "Tech Corp",
+                    jobTitle: "Software Engineer",
+                    website: "https://johndoe.com",
+                    linkedinUrl: "https://linkedin.com/in/johndoe",
+                    twitterUrl: "https://twitter.com/johndoe",
+                    instagramUrl: "https://instagram.com/johndoe",
+                    isActive: true,
+                    lastLoginAt: "2024-01-01T12:00:00.000Z",
+                    notificationsEnabled: true,
                     createdAt: "2024-01-01T00:00:00.000Z",
                     updatedAt: "2024-01-01T00:00:00.000Z",
                   },
@@ -1013,6 +1149,9 @@ This endpoint requires a valid JWT token in the cookie.
           },
           "401": {
             $ref: "#/components/responses/UnauthorizedError",
+          },
+          "404": {
+            $ref: "#/components/responses/NotFoundError",
           },
           "500": {
             $ref: "#/components/responses/ServerError",

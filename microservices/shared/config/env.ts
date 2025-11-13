@@ -2,12 +2,23 @@ import dotenv from "dotenv";
 import { z } from "zod";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { existsSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env from parent directory (backend/.env)
-dotenv.config({ path: join(__dirname, "../../../.env") });
+// Try to load .env from service-specific directory first, then parent directory
+// Path structure: shared/config/env.ts -> microservices/<service>/.env
+// or fallback to: shared/config/env.ts -> backend/.env
+const serviceEnvPath = join(__dirname, "../../.env"); // Service-specific .env (e.g., auth-service/.env)
+const parentEnvPath = join(__dirname, "../../../.env"); // Parent .env (backend/.env)
+
+// Load service-specific .env if it exists, otherwise load parent .env
+if (existsSync(serviceEnvPath)) {
+  dotenv.config({ path: serviceEnvPath });
+} else {
+  dotenv.config({ path: parentEnvPath });
+}
 
 const envSchema = z.object({
   PORT: z.string().default("8085").transform(Number),

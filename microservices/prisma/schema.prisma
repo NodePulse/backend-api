@@ -20,6 +20,23 @@ model User {
   updatedAt       DateTime      @updatedAt
   username        String        @unique
   gender          USER_GENDER?
+  // Additional profile fields
+  phone           String?
+  bio             String?
+  dateOfBirth     DateTime?
+  city            String?
+  country         String?
+  company         String?
+  jobTitle        String?
+  website         String?
+  linkedinUrl     String?
+  twitterUrl      String?
+  instagramUrl    String?
+  // Account status & settings
+  isActive        Boolean       @default(true)
+  lastLoginAt     DateTime?
+  notificationsEnabled Boolean   @default(true)
+  // Relations
   accounts        Account[]
   eventsAttending Attendee[]
   chatMessages    ChatMessage[]
@@ -60,24 +77,48 @@ model Account {
 }
 
 model Event {
-  id           String        @id @default(cuid())
-  title        String
-  description  String
-  body         String
-  location     String
-  imageUrl     String?
-  organizerId  String
-  endDate      DateTime
-  startDate    DateTime
-  videoUrl     String?
-  currency     String        @default("USD")
-  price        String        @default("0.00")
-  category     String        @default("Other")
-  attendees    Attendee[]
-  chatMessages ChatMessage[]
-  comments     Comment[]
-  organizer    User          @relation("OrganizedEvents", fields: [organizerId], references: [id])
-  payments     Payment[]
+  id                    String        @id @default(cuid())
+  title                 String
+  description           String
+  body                  String
+  location              String
+  imageUrl              String?
+  videoUrl              String?
+  organizerId           String
+  startDate             DateTime
+  endDate               DateTime
+  startTime             String        @default("09:00") // HH:MM format
+  endTime               String        @default("17:00") // HH:MM format
+  currency              String        @default("USD")
+  price                 Float         @default(0)
+  category              String
+  eventType             EventType     @default(OFFLINE)
+  maxAttendees          Int?
+  tags                  String?
+  eventUrl              String?
+  contactEmail          String?
+  contactPhone          String?
+  requirements          String?
+  refundPolicy          String?
+  ageRestriction        Int?
+  registrationDeadline  DateTime?
+  allowWaitlist         Boolean       @default(false)
+  sendReminders         Boolean       @default(true)
+  allowGuestRegistration Boolean     @default(false)
+  isPublished           Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  attendees             Attendee[]
+  chatMessages          ChatMessage[]
+  comments              Comment[]
+  organizer             User          @relation("OrganizedEvents", fields: [organizerId], references: [id])
+  payments              Payment[]
+}
+
+enum EventType {
+  OFFLINE
+  ONLINE
+  HYBRID
 }
 
 model Attendee {

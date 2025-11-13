@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { createLogger, format, transports } from "winston";
-import prisma from "../../shared/config/prisma";
+import prisma from "../config/prisma";
 import { ResponseBuilder } from "../../shared/utils/responseHandler";
 import { env } from "../../shared/config/env";
 import { ERROR_CODES } from "../../shared/constants/errorCodes";
@@ -434,14 +434,67 @@ export const getMe = async (req: AuthenticatedRequest, res: Response) => {
       .send();
   }
 
-  logger.info("User details fetched", { requestId, userId: user.id });
-  return new ResponseBuilder(res)
-    .status(200)
-    .message("User profile retrieved successfully")
-    .withData(user)
-    .withRequestId(requestId)
-    .withLogging(env.NODE_ENV !== "production")
-    .send();
+  try {
+    // Fetch complete user profile with all fields
+    const userProfile = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: {
+        id: true,
+        name: true,
+        username: true,
+        email: true,
+        gender: true,
+        image: true,
+        role: true,
+        phone: true,
+        bio: true,
+        dateOfBirth: true,
+        city: true,
+        country: true,
+        company: true,
+        jobTitle: true,
+        website: true,
+        linkedinUrl: true,
+        twitterUrl: true,
+        instagramUrl: true,
+        isActive: true,
+        lastLoginAt: true,
+        notificationsEnabled: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!userProfile) {
+      logger.warn("User not found", { requestId, userId: user.id });
+      return new ResponseBuilder(res)
+        .status(404)
+        .message("User not found")
+        .withErrorCode(ERROR_CODES.USER_NOT_FOUND)
+        .withRequestId(requestId)
+        .withLogging(env.NODE_ENV !== "production")
+        .send();
+    }
+
+    logger.info("User details fetched", { requestId, userId: user.id });
+    return new ResponseBuilder(res)
+      .status(200)
+      .message("User profile retrieved successfully")
+      .withData(userProfile)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  } catch (error) {
+    logger.error("Error fetching user profile", { requestId, error });
+    return new ResponseBuilder(res)
+      .status(500)
+      .message("Failed to fetch user profile. Please try again later")
+      .withError(error as Error)
+      .withErrorCode(ERROR_CODES.INTERNAL_SERVER_ERROR)
+      .withRequestId(requestId)
+      .withLogging(env.NODE_ENV !== "production")
+      .send();
+  }
 };
 
 /**

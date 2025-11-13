@@ -1,0 +1,5 @@
+{"environment":"development","level":"info","message":"User Service running","port":8002,"timestamp":"2025-11-08T16:22:36.177Z","url":"http://localhost:8002"}
+[ioredis] Unhandled error event: Error: connect ECONNREFUSED 127.0.0.1:6379
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)
+[ioredis] Unhandled error event: Error: connect ECONNREFUSED 127.0.0.1:6379
+    at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1637:16)

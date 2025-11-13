@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EventType {
+  OFFLINE
+  ONLINE
+  HYBRID
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+model Event {
+  id                    String        @id @default(cuid())
+  title                 String
+  description           String
+  body                  String
+  location              String
+  imageUrl              String?
+  videoUrl              String?
+  organizerId           String        // User ID from auth-service (stored as string, no foreign key)
+  startDate             DateTime
+  endDate               DateTime
+  startTime             String        @default("09:00") // HH:MM format
+  endTime               String        @default("17:00") // HH:MM format
+  currency              String        @default("USD")
+  price                 Float         @default(0)
+  category              String
+  eventType             EventType     @default(OFFLINE)
+  maxAttendees          Int?
+  tags                  String?
+  eventUrl              String?
+  contactEmail          String?
+  contactPhone          String?
+  requirements          String?
+  refundPolicy          String?
+  ageRestriction        Int?
+  registrationDeadline  DateTime?
+  allowWaitlist         Boolean       @default(false)
+  sendReminders         Boolean       @default(true)
+  allowGuestRegistration Boolean     @default(false)
+  isPublished           Boolean       @default(true)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  attendees             Attendee[]
+  chatMessages          ChatMessage[]
+  comments              Comment[]
+}
+
+model Attendee {
+  id           String   @id @default(cuid())
+  registeredAt DateTime @default(now())
+  userId       String   // User ID from auth-service (stored as string, no foreign key)
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+}
+
+model ChatMessage {
+  id             String   @id @default(cuid())
+  text           String
+  createdAt      DateTime @default(now())
+  authorId       String   // User ID from auth-service (stored as string, no foreign key)
+  eventId        String
+  isAnnouncement Boolean  @default(false)
+  event          Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  text      String
+  createdAt DateTime @default(now())
+  authorId  String   // User ID from auth-service (stored as string, no foreign key)
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+

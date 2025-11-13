@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+model Payment {
+  id             String        @id @default(cuid())
+  amount         Float
+  currency       String
+  status         PaymentStatus @default(PENDING)
+  transactionId  String        @unique
+  paymentGateway String        // e.g., "mock"
+  userId         String        // User ID from auth-service (stored as string, no foreign key)
+  eventId        String        // Event ID from event-service (stored as string, no foreign key)
+  cardLast4      String?       // Only last 4 digits for card
+  method         String        // card, upi, netbanking, etc.
+  metadata       Json?         // Store extra info like UPI ID
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+

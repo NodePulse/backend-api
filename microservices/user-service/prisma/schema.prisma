@@ -1,0 +1,81 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("USER_DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum USER_GENDER {
+  Male
+  Female
+  Other
+}
+
+model User {
+  name            String?
+  email           String        @unique
+  createdAt       DateTime      @default(now())
+  id              String        @id @default(cuid())
+  emailVerified   DateTime?
+  image           String?
+  passwordHash    String?
+  role            UserRole      @default(USER)
+  updatedAt       DateTime      @updatedAt
+  username        String        @unique
+  gender          USER_GENDER?
+  // Additional profile fields
+  phone           String?
+  bio             String?
+  dateOfBirth     DateTime?
+  city            String?
+  country         String?
+  company         String?
+  jobTitle        String?
+  website         String?
+  linkedinUrl     String?
+  twitterUrl      String?
+  instagramUrl    String?
+  // Account status & settings
+  isActive        Boolean       @default(true)
+  lastLoginAt     DateTime?
+  notificationsEnabled Boolean   @default(true)
+  // Relations
+  accounts        Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Otp {
+  id        String   @id @default(cuid())
+  email     String
+  code      String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email])
+}
+

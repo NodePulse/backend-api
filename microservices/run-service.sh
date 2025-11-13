@@ -18,12 +18,12 @@ PORT=$2
 
 # Service configurations
 declare -A SERVICE_PORTS=(
-  ["auth-service"]="3001"
-  ["user-service"]="3002"
-  ["event-service"]="3003"
-  ["transaction-service"]="3004"
-  ["admin-service"]="3005"
-  ["upload-service"]="3006"
+  ["auth-service"]="8001"
+  ["user-service"]="8002"
+  ["event-service"]="8003"
+  ["transaction-service"]="8004"
+  ["admin-service"]="8005"
+  ["upload-service"]="8006"
 )
 
 # Function to print colored output
@@ -49,17 +49,17 @@ show_usage() {
   echo "Usage: $0 <service-name> [port]"
   echo ""
   echo "Available services:"
-  echo "  - auth-service      (default port: 3001)"
-  echo "  - user-service      (default port: 3002)"
-  echo "  - event-service     (default port: 3003)"
-  echo "  - transaction-service (default port: 3004)"
-  echo "  - admin-service     (default port: 3005)"
-  echo "  - upload-service    (default port: 3006)"
+  echo "  - auth-service      (default port: 8001)"
+  echo "  - user-service      (default port: 8002)"
+  echo "  - event-service     (default port: 8003)"
+  echo "  - transaction-service (default port: 8004)"
+  echo "  - admin-service     (default port: 8005)"
+  echo "  - upload-service    (default port: 8006)"
   echo ""
   echo "Examples:"
   echo "  $0 auth-service"
-  echo "  $0 auth-service 3001"
-  echo "  $0 user-service 4000"
+  echo "  $0 auth-service 8001"
+  echo "  $0 user-service 9000"
   echo ""
   exit 1
 }
@@ -121,15 +121,21 @@ else
   print_warning "Shared directory exists (not a symlink)"
 fi
 
-# Check if .env file exists in parent directory
-if [ -f "../.env" ]; then
+# Check for .env file (service-specific first, then parent directory)
+if [ -f ".env" ]; then
+  print_success ".env file found in service directory ($SERVICE_NAME/.env)"
+  # Load environment variables from service-specific .env
+  set -a
+  source .env
+  set +a
+elif [ -f "../.env" ]; then
   print_success ".env file found in parent directory"
-  # Load environment variables
+  # Load environment variables from parent .env
   set -a
   source ../.env
   set +a
 else
-  print_warning "No .env file found in parent directory"
+  print_warning "No .env file found (checked $SERVICE_NAME/.env and ../.env)"
   print_info "The service may fail if environment variables are not set"
 fi
 
@@ -152,9 +158,15 @@ echo ""
 export PORT=$PORT
 export NODE_ENV=${NODE_ENV:-development}
 
-# Load .env variables if file exists
-if [ -f "../.env" ]; then
-  export $(grep -v '^#' ../.env | xargs -d '\n')
+# Load .env variables if file exists (service-specific first, then parent)
+if [ -f ".env" ]; then
+  set -a
+  source .env
+  set +a
+elif [ -f "../.env" ]; then
+  set -a
+  source ../.env
+  set +a
 fi
 
 # Check if tsx is available, otherwise use ts-node or npm run dev

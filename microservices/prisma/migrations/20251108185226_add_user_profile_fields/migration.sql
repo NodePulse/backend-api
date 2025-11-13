@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "bio" TEXT,
+ADD COLUMN     "city" TEXT,
+ADD COLUMN     "company" TEXT,
+ADD COLUMN     "country" TEXT,
+ADD COLUMN     "dateOfBirth" TIMESTAMP(3),
+ADD COLUMN     "instagramUrl" TEXT,
+ADD COLUMN     "isActive" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "jobTitle" TEXT,
+ADD COLUMN     "lastLoginAt" TIMESTAMP(3),
+ADD COLUMN     "linkedinUrl" TEXT,
+ADD COLUMN     "notificationsEnabled" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN     "phone" TEXT,
+ADD COLUMN     "twitterUrl" TEXT,
+ADD COLUMN     "website" TEXT;
