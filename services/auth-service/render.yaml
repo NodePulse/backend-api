@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: auth-service
+    env: docker
+    plan: free
+    branch: main
+    buildCommand: "npm run build && npx prisma generate"
+    startCommand: "npm start"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 8081
+      - key: JWT_SECRET
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: RABBITMQ_URL
+        sync: false
+      - key: RABBITMQ_AUTH_QUEUE
+        value: auth_service_queue
+      - key: RABBITMQ_RESPONSE_QUEUE
+        value: gateway_response_queue
+      - key: RABBITMQ_USER_QUEUE
+        value: user_service_queue
+      - key: RABBITMQ_USER_RESPONSE_QUEUE
+        value: user_service_response_queue
