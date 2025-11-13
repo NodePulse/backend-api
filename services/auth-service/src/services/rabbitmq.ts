@@ -1,4 +1,4 @@
-import amqp, { Connection, Channel, ConsumeMessage } from "amqplib";
+import * as amqp from "amqplib";
 import { createLogger, format, transports } from "winston";
 import { env } from "../config/env.js";
 import * as authController from "../controller/authController.js";
@@ -18,8 +18,8 @@ export interface QueueMessage {
 }
 
 class RabbitMQConsumer {
-  private connection: Connection | null = null;
-  private channel: Channel | null = null;
+  private connection: amqp.ChannelModel | null = null;
+  private channel: amqp.Channel | null = null;
   private readonly queueName: string;
   private readonly responseQueue: string;
 
@@ -33,6 +33,7 @@ class RabbitMQConsumer {
    */
   async connect(): Promise<void> {
     try {
+      logger.info("Connecting to RabbitMQ...");
       this.connection = await amqp.connect(env.RABBITMQ_URL);
       this.channel = await this.connection.createChannel();
 
@@ -40,24 +41,22 @@ class RabbitMQConsumer {
       await this.channel.assertQueue(this.queueName, { durable: true });
       await this.channel.assertQueue(this.responseQueue, { durable: true });
 
-      // Set prefetch to process one message at a time
-      await this.channel.prefetch(1);
+      // Limit to one unacknowledged message at a time
+      this.channel.prefetch(1);
 
-      logger.info(`Waiting for messages in ${this.queueName}`);
+      logger.info(`✅ Waiting for messages in queue: ${this.queueName}`);
 
-      // Start consuming messages
-      await this.channel.consume(
+      this.channel.consume(
         this.queueName,
-        async (msg: ConsumeMessage | null) => {
-          if (msg) {
-            try {
-              const message: QueueMessage = JSON.parse(msg.content.toString());
-              await this.handleMessage(message);
-              this.channel?.ack(msg);
-            } catch (error) {
-              logger.error("Error processing message", { error });
-              this.channel?.nack(msg, false, false);
-            }
+        async (msg: amqp.ConsumeMessage | null) => {
+          if (!msg) return;
+          try {
+            const message: QueueMessage = JSON.parse(msg.content.toString());
+            await this.handleMessage(message);
+            this.channel?.ack(msg);
+          } catch (error) {
+            logger.error("Error processing message", { error });
+            this.channel?.nack(msg, false, false);
           }
         },
         { noAck: false }
@@ -65,7 +64,7 @@ class RabbitMQConsumer {
 
       logger.info("RabbitMQ consumer started successfully");
     } catch (error) {
-      logger.error("Failed to connect to RabbitMQ", { error });
+      logger.error("❌ Failed to connect to RabbitMQ", { error });
       throw error;
     }
   }
@@ -75,13 +74,12 @@ class RabbitMQConsumer {
    */
   private async handleMessage(message: QueueMessage): Promise<void> {
     const { requestId, action, data, headers } = message;
-
     logger.info("Processing message", { requestId, action, service: message.service });
 
     let response;
 
     try {
-      // Route to appropriate controller method
+      // Route message to controller actions
       switch (action) {
         case "register":
           response = await authController.register(requestId, data);
@@ -112,25 +110,26 @@ class RabbitMQConsumer {
             requestId,
             success: false,
             statusCode: 404,
-            error: {
-              message: `Unknown action: ${action}`,
-            },
+            error: { message: `Unknown action: ${action}` },
           };
       }
 
       // Send response back to API Gateway
-      if (this.channel) {
-        this.channel.sendToQueue(
-          this.responseQueue,
-          Buffer.from(JSON.stringify(response)),
-          {
-            persistent: true,
-            correlationId: requestId,
-          }
-        );
-
-        logger.info("Response sent", { requestId, statusCode: response.statusCode });
+      if (!this.channel) {
+        logger.error("RabbitMQ channel not initialized");
+        return;
       }
+
+      this.channel.sendToQueue(
+        this.responseQueue,
+        Buffer.from(JSON.stringify(response)),
+        { persistent: true, correlationId: requestId }
+      );
+
+      logger.info("Response sent", {
+        requestId,
+        statusCode: response.statusCode,
+      });
     } catch (error: any) {
       logger.error("Error handling message", { requestId, error });
       const errorResponse = {
@@ -147,10 +146,7 @@ class RabbitMQConsumer {
         this.channel.sendToQueue(
           this.responseQueue,
           Buffer.from(JSON.stringify(errorResponse)),
-          {
-            persistent: true,
-            correlationId: requestId,
-          }
+          { persistent: true, correlationId: requestId }
         );
       }
     }
@@ -175,4 +171,3 @@ class RabbitMQConsumer {
 }
 
 export const rabbitMQConsumer = new RabbitMQConsumer();
-
