@@ -1,21 +1,36 @@
-# 1. Use official Node.js 20 image
-FROM node:20-alpine AS base
+# 1. Base image
+FROM node:20-alpine AS builder
 WORKDIR /usr/src/app
 
-# 2. Copy only package files first for caching
+# 2. Copy package files
 COPY package*.json ./
 
-# 3. Install production dependencies
-RUN npm install --omit=dev
+# 3. Install all dependencies (including dev) for build
+RUN npm install
 
-# 4. Copy the entire project
+# 4. Copy all source code
 COPY . .
 
-# 5. Build TypeScript
-RUN npm run build && npx prisma generate
+# 5. Generate Prisma client and build TypeScript
+RUN npx prisma generate && npm run build
 
-# 6. Expose the app port
+# --- Build stage complete ---
+
+# 6. Create a smaller runtime image
+FROM node:20-alpine
+WORKDIR /usr/src/app
+
+# 7. Copy only production dependencies
+COPY package*.json ./
+RUN npm install --omit=dev
+
+# 8. Copy compiled code + Prisma client from builder stage
+COPY --from=builder /usr/src/app/dist ./dist
+COPY --from=builder /usr/src/app/prisma ./prisma
+COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
+
+# 9. Expose port
 EXPOSE 8081
 
-# 7. Start command
+# 10. Start app
 CMD ["npm", "start"]
