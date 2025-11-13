@@ -52,7 +52,7 @@ class RabbitMQConsumer {
           if (!msg) return;
           try {
             const message: QueueMessage = JSON.parse(msg.content.toString());
-            await this.handleMessage(message);
+            await this.handleMessage(message, msg);
             this.channel?.ack(msg);
           } catch (error) {
             logger.error("Error processing message", { error });
@@ -72,7 +72,7 @@ class RabbitMQConsumer {
   /**
    * Handle incoming message and send response
    */
-  private async handleMessage(message: QueueMessage): Promise<void> {
+  private async handleMessage(message: QueueMessage, msg: amqp.ConsumeMessage): Promise<void> {
     const { requestId, action, data, headers } = message;
     logger.info("Processing message", { requestId, action, service: message.service });
 
@@ -121,9 +121,10 @@ class RabbitMQConsumer {
       }
 
       this.channel.sendToQueue(
-        this.responseQueue,
+        msg.properties.replyTo,
+        // this.responseQueue,
         Buffer.from(JSON.stringify(response)),
-        { persistent: true, correlationId: requestId }
+        { persistent: true, correlationId: msg.properties.correlationId }
       );
 
       logger.info("Response sent", {
