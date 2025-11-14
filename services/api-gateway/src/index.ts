@@ -92,6 +92,8 @@ async function startServer() {
   }
 }
 
+startServer();
+
 // Graceful shutdown
 process.on("SIGTERM", async () => {
   logger.info("SIGTERM received, shutting down gracefully");
@@ -105,5 +107,4 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
-startServer();
 
