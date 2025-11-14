@@ -20,6 +20,7 @@
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^7.0.6",
     "winston": "^3.18.3",
+    "dotenv": "^16.4.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -30,7 +31,6 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.11.24",
     "@types/nodemailer": "^7.0.2",
-    "dotenv": "^16.4.5",
     "prisma": "^6.16.2",
     "tsx": "^4.20.5",
     "typescript": "^5.3.3"
