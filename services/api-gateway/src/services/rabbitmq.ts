@@ -63,7 +63,9 @@ class RabbitMQService {
       try {
         logger.info("Attempting to connect to RabbitMQ", { url: env.RABBITMQ_URL, attempt: this.reconnectAttempts + 1 });
         // @ts-expect-error - amqplib types
-        this.connection = await amqp.connect(env.RABBITMQ_URL);
+        this.connection = await amqp.connect(env.RABBITMQ_URL, {
+          heartbeat: 30
+        });
         // create channel
         // @ts-expect-error - amqplib types
         this.channel = await this.connection.createChannel();

@@ -43,7 +43,9 @@ class RabbitMQConsumer {
       try {
         logger.info("Connecting to RabbitMQ...", { url: env.RABBITMQ_URL, attempt: this.reconnectAttempts + 1 });
         // Create connection + channel
-        this.connection = await amqp.connect(env.RABBITMQ_URL);
+        this.connection = await amqp.connect(env.RABBITMQ_URL, {
+          heartbeat: 30,
+        });
         this.channel = await this.connection.createChannel();
 
         // connection handlers
