@@ -63,7 +63,7 @@ export class ResponseBuilder {
     this.requestId = requestId;
     this.startTime = process.hrtime();
     // Only set encryption secret if encryption is enabled
-    this.encryptionSecret = env.ENABLE_ENCRYPTION === false ? env.ENCRYPTION_KEY : undefined;
+    this.encryptionSecret = env.ENABLE_ENCRYPTION === true ? env.ENCRYPTION_KEY : undefined;
   }
 
   status(code: number): this {
