@@ -72,9 +72,16 @@ class RabbitMQConsumer {
   /**
    * Handle incoming message and send response
    */
-  private async handleMessage(message: QueueMessage, msg: amqp.ConsumeMessage): Promise<void> {
+  private async handleMessage(
+    message: QueueMessage,
+    msg: amqp.ConsumeMessage
+  ): Promise<void> {
     const { requestId, action, data, headers } = message;
-    logger.info("Processing message", { requestId, action, service: message.service });
+    logger.info("Processing message", {
+      requestId,
+      action,
+      service: message.service,
+    });
 
     let response;
 
@@ -94,7 +101,11 @@ class RabbitMQConsumer {
           response = await authController.getMe(requestId, headers);
           break;
         case "changePassword":
-          response = await authController.changePassword(requestId, data, headers);
+          response = await authController.changePassword(
+            requestId,
+            data,
+            headers
+          );
           break;
         case "forgotPassword":
           response = await authController.forgotPassword(requestId, data);
@@ -145,9 +156,9 @@ class RabbitMQConsumer {
 
       if (this.channel) {
         this.channel.sendToQueue(
-          this.responseQueue,
+          msg.properties.replyTo,
           Buffer.from(JSON.stringify(errorResponse)),
-          { persistent: true, correlationId: requestId }
+          { persistent: true, correlationId: msg.properties.correlationId }
         );
       }
     }
