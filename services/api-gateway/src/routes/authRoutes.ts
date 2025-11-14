@@ -43,7 +43,11 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in register route", { error, requestId });
+    logger.error("Error in register route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -60,14 +64,14 @@ authRouter.post("/register", async (req: Request, res: Response) => {
 authRouter.post("/login", async (req: Request, res: Response) => {
   const requestId = crypto.randomUUID();
   const builder = new ResponseBuilder(requestId);
-
+  
   try {
     const response = await rabbitMQService.sendMessage(
       "auth",
       "login",
       req.body
     );
-
+    
     // Set cookie if token is present in response
     if (response.data?.token) {
       res.cookie("token", response.data.token, {
@@ -77,20 +81,25 @@ authRouter.post("/login", async (req: Request, res: Response) => {
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
       });
     }
-
+    
     builder
-      .status(response.statusCode)
-      .withMessage(response.success ? "Login successful" : response.error?.message || "Login failed")
-      .withData(response.data)
-      .withRequestContext({ method: req.method, url: req.originalUrl });
-
+    .status(response.statusCode)
+    .withMessage(response.success ? "Login successful" : response.error?.message || "Login failed")
+    .withData(response.data)
+    .withRequestContext({ method: req.method, url: req.originalUrl });
+    
     if (response.error) {
       builder.withError(response.error.message, response.error.code, response.error.details);
     }
-
+    
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in login route", { error, requestId });
+    console.log("hello auth")
+    logger.error("Error in login route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -139,7 +148,11 @@ authRouter.post("/logout", async (req: AuthenticatedRequest, res: Response) => {
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in logout route", { error, requestId });
+    logger.error("Error in logout route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -186,7 +199,11 @@ authRouter.get("/me", async (req: AuthenticatedRequest, res: Response) => {
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in getMe route", { error, requestId });
+    logger.error("Error in getMe route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -232,7 +249,11 @@ authRouter.post("/change-password", async (req: AuthenticatedRequest, res: Respo
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in change-password route", { error, requestId });
+    logger.error("Error in change-password route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -268,7 +289,11 @@ authRouter.post("/forgot-password", async (req: Request, res: Response) => {
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in forgot-password route", { error, requestId });
+    logger.error("Error in forgot-password route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -304,7 +329,11 @@ authRouter.post("/verify-otp", async (req: Request, res: Response) => {
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in verify-otp route", { error, requestId });
+    logger.error("Error in verify-otp route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -340,7 +369,11 @@ authRouter.post("/change-forgot-password", async (req: Request, res: Response) =
 
     res.status(response.statusCode).json(builder.build());
   } catch (error: any) {
-    logger.error("Error in change-forgot-password route", { error, requestId });
+    logger.error("Error in change-forgot-password route", {
+      requestId,
+      errorMessage: error.message,
+      errorStack: error.stack,
+    });
     builder
       .status(500)
       .withMessage("Internal server error")
@@ -351,4 +384,3 @@ authRouter.post("/change-forgot-password", async (req: Request, res: Response) =
 });
 
 export default authRouter;
-

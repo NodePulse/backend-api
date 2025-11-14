@@ -21,6 +21,11 @@ const envSchema = z.object({
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),
   R2_PUBLIC_URL: z.string().optional(),
+  AUTH_SERVICE_URL: z.string().default("http://localhost:8001"),
+  USER_SERVICE_URL: z.string().default("http://localhost:8002"),
+  EVENT_SERVICE_URL: z.string().default("http://localhost:8003"),
+  UPLOAD_SERVICE_URL: z.string().default("http://localhost:8004"),
+  API_GATEWAY_URL: z.string().default("http://localhost:8000"),
 });
 
 export const env = envSchema.parse(process.env);

@@ -9,6 +9,8 @@ import authRouter from "./routes/authRoutes.js";
 import userRouter from "./routes/userRoutes.js";
 import eventRouter from "./routes/eventRoutes.js";
 import uploadRouter from "./routes/uploadRoutes.js";
+import internalHealthRouter from "./routes/internalHealthRoutes.js";
+import swaggerDocsRouter from "./routes/swaggerDocsRoutes.js";
 
 const logger = createLogger({
   level: "info",
@@ -21,7 +23,7 @@ const PORT = env.PORT || 8000;
 
 // CORS configuration
 const corsOptions = {
-  origin: [env.CLIENT_URL, "http://localhost:3000"],
+  origin: [env.CLIENT_URL, "http://localhost:3000", "http://localhost:3001"],
   credentials: true,
 };
 
@@ -40,6 +42,10 @@ app.get("/health", (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+app.use("/internal/health", internalHealthRouter)
+
+// Swagger docs
+app.use("/api-docs", swaggerDocsRouter);
 
 // Routes
 app.use("/api/v1/auth", authRouter);
